@@ -64,6 +64,20 @@
       "description": "seconds"
   },
   {
+      "type": "toggle",
+      "messageKey": "heartrate",
+      "defaultValue": false,
+      "label": "Display heartrate sensor reading",
+      "capabilities": [ "HEALTH"]
+  },
+  {
+      "type": "toggle",
+      "messageKey": "touch",
+      "defaultValue": false,
+      "label": "Touch support",
+      "capabilities": [ "PLATFORM_EMERY" ]
+  },
+  {
     "type": "submit",
     "defaultValue": "Save Settings"
   }

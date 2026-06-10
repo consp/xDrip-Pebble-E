@@ -33,6 +33,11 @@ Make sure you set this to 0 before building a release. */
 #define LOG(...)
 #endif
 
+#define EMERY(x) \
+    if (PLATFORM == 4) {\
+        x\
+    }
+
 /* The line below, if defined, will only indicate test values on the display.
 this is for testing purposes only until I can get the PebbleKit.JS code operating with the emulator.
 Make sure you udefine this before building a release.
@@ -55,6 +60,7 @@ TextLayer *battlevel_layer = NULL;
 TextLayer *watch_battlevel_layer = NULL;
 TextLayer *time_watch_layer = NULL;
 TextLayer *date_app_layer = NULL;
+TextLayer *heartrate_layer = NULL;
 
 // bitmap layer definitions
 BitmapLayer *icon_layer = NULL;
@@ -108,6 +114,10 @@ static GFont time_font;
 static char message_layer_text[13];
 static GFont time_font_small;
 static GFont time_font_normal;
+static GFont time_font_medium;
+static GFont time_font_smaller_numbers;
+
+static bool display_heartrate = false;
 
 // Boolean to allow/prevent re-raise of NO BLUETOOTH vibration
 static bool vibe_repeat = false;
@@ -321,6 +331,8 @@ static uint8_t minutes_cgm = 0;
 #define SET_HIGH_LINE			110		// Setting key - Enable High line on graph.
 #define SET_LOW_LINE			111		// Setting key - Enable Low line on graph.
 #define SET_MESSAGE_TIMEOUT     113     // Setting key - Message timeout
+#define SET_HEARTRATE           114     // Setting key - Show heartrate value
+#define SET_TOUCH               115     // Setting key - Enable touchs events
 #define CGM_SYNC_KEY			1000	// key pebble will use to request an update.  This should probably include the "capabilities" bits
 #define PBL_PLATFORM			1001	// key pebble will use to send it's platform  This is probably not required under the new famework.
 #define PBL_APP_VER				1002	// key pebble will use to send the face/app version.  This is probably not required under the new framework.
@@ -372,10 +384,11 @@ static const uint8_t PHONEOFF_ICON_INDX = 2;
 /**
  * predefines
  */
-
+void update_layout(void);
 void handle_second_tick_cgm(struct tm* tick_time_cgm, TimeUnits units_changed_cgm);
 void handle_minute_tick_cgm(struct tm* tick_time_cgm, TimeUnits units_changed_cgm);
 void handle_message_tick(void *data);
+void handle_heartrate_tick(HealthEventType event, void *context);
 
 static char *translate_app_error(AppMessageResult result)
 {
@@ -1699,6 +1712,7 @@ static void load_battlevel()
 	TRACE("LOAD BATTLEVEL, END FUNCTION");
 } // end load_battlevel
 
+
 // send_cmd_cgm - Function to send dat to xDrip to cause a refresh/update of data.
 // Needs to include configuration values that xDrip can read and respond to.
 static void send_cmd_cgm(void)
@@ -2008,10 +2022,6 @@ void inbox_received_handler_cgm(DictionaryIterator *iterator, void *context)
                         // register second timer
                         tick_timer_service_subscribe(SECOND_UNIT, &handle_second_tick_cgm);
                         // resize time and date layer iff PT2
-                        if (HIGH_RES()) {
-                            layer_set_frame((Layer *) time_watch_layer, GRect(0, 121, 200, 60));
-                            layer_set_frame((Layer *) date_app_layer, GRect(0, 168, 200, 39));
-                        }
                     }
 					display_seconds = true;
 					time_font = time_font_small;
@@ -2022,16 +2032,11 @@ void inbox_received_handler_cgm(DictionaryIterator *iterator, void *context)
                         // unsub seconds timer to save power
                         tick_timer_service_unsubscribe();
                         tick_timer_service_subscribe(MINUTE_UNIT, &handle_minute_tick_cgm);
-                        // reset layers
-
-                        if (HIGH_RES()) {
-                            layer_set_frame((Layer *) time_watch_layer, GRect(0, 111, 200, 60));
-                            layer_set_frame((Layer *) date_app_layer, GRect(0, 176, 200, 39));
-                        }
                     }
 					display_seconds = false;
 					time_font = time_font_normal;
 				}
+                update_layout();
 				persist_write_bool(SET_DISP_SECS, display_seconds);
 				text_layer_set_font(time_watch_layer, time_font);
 				if(clock_is_24h_style() == true)
@@ -2103,10 +2108,31 @@ void inbox_received_handler_cgm(DictionaryIterator *iterator, void *context)
                 LOG("Got message timeout, message is \"%lx\"", data->value->uint32);
                 message_tick_timeout = data->value->uint32 * 1000;
                 if (!app_timer_reschedule(message_tick_timer, message_tick_timeout)) {
+                    app_timer_cancel(message_tick_timer); // always unsub
                     message_tick_timer = app_timer_register(message_tick_timeout, handle_message_tick, NULL);
                 }
-                break;
                 persist_write_int(SET_MESSAGE_TIMEOUT, message_tick_timeout);
+                break;
+
+            case SET_HEARTRATE:
+                LOG("Got heartrate setting, message is \"%lx\"", data->value->uint32);
+                display_heartrate = data->value->uint8;
+                if (display_heartrate) {
+                    LOG("Displaying heartrate");
+                    EMERY(
+                        layer_set_hidden((Layer *) heartrate_layer, false);
+                        health_service_events_unsubscribe();
+                        health_service_events_subscribe(handle_heartrate_tick, NULL);
+                        handle_heartrate_tick(HealthEventHeartRateUpdate, NULL); //update
+                        )
+                } else {
+                    EMERY(
+                        layer_set_hidden((Layer *) heartrate_layer, true);
+                    )
+                }
+                update_layout();
+                persist_write_bool(SET_HEARTRATE, display_heartrate);
+                break;
 			default:
                 LOG("sync_tuple_cgm_callback: Dictionary Key not recognised");
 			break;
@@ -2238,7 +2264,18 @@ void handle_minute_tick_cgm(struct tm* tick_time_cgm, TimeUnits units_changed_cg
 
 } // end handle_minute_tick_cgm
 
-//#ifdef PBL_PLATFORM_APLITE
+
+void handle_heartrate_tick(HealthEventType event, void *context) {
+    static char heartrate_text[4]; // max 999\0, should be enough
+    LOG("Health Tick: %lx", event);
+    if (event == HealthEventHeartRateUpdate) {
+        LOG("HR Update Event");
+        HealthValue value = health_service_peek_current_value(HealthMetricHeartRateBPM);
+        snprintf(heartrate_text, 4, "% 3ld", value);
+        text_layer_set_text(heartrate_layer, heartrate_text);
+    }
+}
+
 #ifndef PBL_COLOR
 
 static uint8_t breverse(uint8_t b);
@@ -2535,6 +2572,11 @@ void window_load_cgm(Window *window_cgm)
 	watch_battlevel_layer = text_layer_create(GRect(98, 203, 100, 24));
 	text_layer_set_text_alignment(watch_battlevel_layer, GTextAlignmentRight);
 
+    // only available on emery
+    EMERY(
+        heartrate_layer = text_layer_create(GRect(4, 168, 70, 35));
+        text_layer_set_text_alignment(heartrate_layer, GTextAlignmentLeft);
+    )
 #endif
 
 //FLINT (CORE DUO 2)
@@ -2705,12 +2747,10 @@ void window_load_cgm(Window *window_cgm)
 
 	// CGM TIME AGO READING
     LOG("Creating CGM Time Ago Bitmap layer");
-//if it is not for a COLOR platform, it is monochrome
-	//text_layer_set_text_alignment(cgmtime_layer, GTextAlignmentRight);
-	//text_layer_set_text_alignment(cgmtime_layer, GTextAlignmentCenter);
+    //if it is not for a COLOR platform, it is monochrome
 	layer_add_child(window_layer_cgm, text_layer_get_layer(cgmtime_layer));
 
-// if this is not COLOR platform, it is monochrome.
+    // if this is not COLOR platform, it is monochrome.
 #ifndef PBL_COLOR
 	// top layer on pebble classic
 	layer_add_child(window_layer_cgm, bitmap_layer_get_layer(bg_trend_layer));
@@ -2718,16 +2758,13 @@ void window_load_cgm(Window *window_cgm)
 
 	// CURRENT ACTUAL TIME FROM WATCH
     LOG("Creating Watch Time Text layer");
-//	text_layer_set_text_alignment(time_watch_layer, GTextAlignmentCenter);
 	layer_add_child(window_layer_cgm, text_layer_get_layer(time_watch_layer));
 
 	// CURRENT ACTUAL DATE FROM APP
     LOG("Creating Watch Date Text layer");
-//	date_app_layer = text_layer_create(GRect(0, 122, 143, 29));
 	text_layer_set_text_color(date_app_layer, fg_colour);
 	text_layer_set_background_color(date_app_layer, GColorClear);
 	text_layer_set_font(date_app_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
-	//text_layer_set_text_alignment(date_app_layer, GTextAlignmentCenter);
 	layer_add_child(window_layer_cgm, text_layer_get_layer(date_app_layer));
 	draw_date_from_app();
 
@@ -2736,9 +2773,17 @@ void window_load_cgm(Window *window_cgm)
 	text_layer_set_text_color(battlevel_layer, GColorMintGreen);
 	text_layer_set_background_color(battlevel_layer, GColorClear);
 	text_layer_set_font(battlevel_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-//	text_layer_set_text_alignment(battlevel_layer, GTextAlignmentLeft);
 	layer_add_child(window_layer_cgm, text_layer_get_layer(battlevel_layer));
     LOG("battlevel_layer; %s", text_layer_get_text(battlevel_layer));
+
+    EMERY(
+        LOG("Creating Heartrate Text layer");
+        text_layer_set_text_color(heartrate_layer, GColorWhite);
+        text_layer_set_background_color(heartrate_layer, GColorClear);
+        text_layer_set_font(heartrate_layer, time_font_smaller_numbers);
+        layer_add_child(window_layer_cgm, text_layer_get_layer(heartrate_layer));
+        LOG("heartrate_layer; %s", text_layer_get_text(battlevel_layer));
+    )
 
 
 	// WATCH BATTERY LEVEL
@@ -2814,6 +2859,23 @@ void window_load_cgm(Window *window_cgm)
 	timer_cgm = app_timer_register((LOADING_MSGSEND_SECS*MS_IN_A_SECOND), timer_callback_cgm, NULL);
 	TRACE("WINDOW LOAD, TIMER REGISTER DONE");
 
+    // acquire HR if display is active
+    if (display_heartrate) {
+        DEBUG("Acquiring initial HR");
+        HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+        if (hr & HealthServiceAccessibilityMaskAvailable) {
+            DEBUG("Available");
+            handle_heartrate_tick(HealthEventHeartRateUpdate, NULL);
+        } else {
+            DEBUG("Unavailable");
+        }
+    } else {
+        DEBUG("Not getting HR");
+    }
+
+    // make sure on HR displays everythign is in the right position
+    update_layout();
+
 } // end window_load_cgm
 
 void window_unload_cgm(Window *window_cgm)
@@ -2843,6 +2905,7 @@ void window_unload_cgm(Window *window_cgm)
 	if(watch_battlevel_layer != NULL) destroy_null_TextLayer(&watch_battlevel_layer);
 	if(time_watch_layer != NULL) destroy_null_TextLayer(&time_watch_layer);
 	if(date_app_layer != NULL) destroy_null_TextLayer(&date_app_layer);
+	if(heartrate_layer != NULL) destroy_null_TextLayer(&heartrate_layer);
 
 	//destroy the face background layers.
 	if(lower_face_layer != NULL) destroy_null_BitmapLayer(&lower_face_layer);
@@ -2859,6 +2922,8 @@ static void init_cgm(void)
 	vibe_repeat = persist_exists(SET_VIBE_REPEAT)? persist_read_bool(SET_VIBE_REPEAT) : true;
 	SameColourTopAndBottom = persist_exists(SET_SAMECOLOUR)? persist_read_bool(SET_SAMECOLOUR) : false;
     message_tick_timeout = persist_exists(SET_MESSAGE_TIMEOUT) ? persist_read_int(SET_MESSAGE_TIMEOUT) * 1000 : 15000;
+    display_heartrate = persist_exists(SET_HEARTRATE) ? persist_read_bool(SET_HEARTRATE) : false;
+
 #ifdef PBL_COLOR
 	fg_colour = persist_exists(SET_FG_COLOUR)? GColorFromHEX(persist_read_int(SET_FG_COLOUR)) : COLOR_FALLBACK(GColorWhite,GColorWhite);
 	bg_colour = persist_exists(SET_BG_COLOUR)? GColorFromHEX(persist_read_int(SET_BG_COLOUR)) : COLOR_FALLBACK(GColorDukeBlue,GColorBlack);
@@ -2869,18 +2934,21 @@ static void init_cgm(void)
 	//initialise the Time Fonts
     if (HIGH_RES()) {
         time_font_normal = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_GOTHAM_BOLD_60));
-        time_font_small = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_GOTHAM_BOLD_40));
+        time_font_small = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_GOTHAM_BOLD_30));
+        time_font_medium = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_GOTHAM_BOLD_40));
     } else {
         time_font_normal = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_GOTHAM_BOLD_40));
         time_font_small = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_GOTHAM_BOLD_30));
+        time_font_medium = time_font_small;
     }
+    EMERY(time_font_smaller_numbers = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_GOTHAM_BOLD_32));)
 	//Initialise the time format string.  No seconds here.
 	if(clock_is_24h_style() == true)
 	{
 		if(display_seconds) 
 		{
 			snprintf(time_watch_format, 9, "%s", TIME_24HS_FORMAT);
-			time_font = time_font_small;
+			time_font = HIGH_RES() ? time_font_medium : time_font_small;
 		}
 		else
 		{
@@ -2893,7 +2961,7 @@ static void init_cgm(void)
 		if(display_seconds)
 		{
 			snprintf(time_watch_format, 9, "%s", TIME_12HS_FORMAT);
-			time_font = time_font_small;
+			time_font = HIGH_RES() ? time_font_medium : time_font_small;
 		}
 		else
 		{
@@ -2910,6 +2978,13 @@ static void init_cgm(void)
 
     tick_timer_service_subscribe(MINUTE_UNIT, &handle_minute_tick_cgm);
     message_tick_timer = app_timer_register(message_tick_timeout, handle_message_tick, NULL);
+
+    // subscribe to HR sensor reading if applicable
+    DEBUG("Heartrate display: %d", display_heartrate);
+    if (display_heartrate) {
+        DEBUG("Registering heartrate service");
+        health_service_events_subscribe(handle_heartrate_tick, NULL);
+    }
 
 	// subscribe to the bluetooth connection service
 	bluetooth_connection_service_subscribe(handle_bluetooth_cgm);
@@ -2999,12 +3074,28 @@ static void deinit_cgm(void)
 	}
 	//unload the custom time font.
 	fonts_unload_custom_font(time_font_normal);
+	fonts_unload_custom_font(time_font_medium);
 	fonts_unload_custom_font(time_font_small);
+    fonts_unload_custom_font(time_font_smaller_numbers);
 
 
 	TRACE("DEINIT CODE OUT");
 } // end deinit_cgm
+  //
 
+
+void update_layout(void) {
+
+    if (HIGH_RES()) {
+        layer_set_frame((Layer *) time_watch_layer, GRect(0, display_seconds ? 121 : 108, 200, 60));
+        layer_set_frame((Layer *) date_app_layer, GRect(0 + (display_heartrate ? 24 : 0), display_seconds ? 168 : 173, 200, 39));
+    }
+    if (display_seconds) {
+        time_font = HIGH_RES() ? time_font_medium : time_font_small;
+    } else {
+        time_font = time_font_normal;
+    }
+}
 int main(void)
 {
 	init_cgm();

@@ -96,6 +96,12 @@
           "file": "images/err.png"
         },
         {
+          "characterRegex": "[0-9 ]",
+          "type": "font",
+          "name": "GOTHAM_BOLD_32",
+          "file": "GothamBold.ttf"
+        },
+        {
           "characterRegex": "[0-9:APM ]",
           "type": "font",
           "name": "GOTHAM_BOLD_30",
@@ -141,6 +147,8 @@
       "nolowline": 110,
       "health": 112,
       "messagetimeout": 113,
+      "heartrate": 114,
+      "touch": 115,
       "sync": 1000,
       "platform": 1001,
       "version": 1002,
