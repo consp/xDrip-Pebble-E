@@ -385,10 +385,12 @@ static const uint8_t PHONEOFF_ICON_INDX = 2;
  * predefines
  */
 void update_layout(void);
+void init_touch(void);
 void handle_second_tick_cgm(struct tm* tick_time_cgm, TimeUnits units_changed_cgm);
 void handle_minute_tick_cgm(struct tm* tick_time_cgm, TimeUnits units_changed_cgm);
 void handle_message_tick(void *data);
 void handle_heartrate_tick(HealthEventType event, void *context);
+void handle_touch_event(const TouchEvent *event, void *context);
 
 static char *translate_app_error(AppMessageResult result)
 {
@@ -2276,6 +2278,21 @@ void handle_heartrate_tick(HealthEventType event, void *context) {
     }
 }
 
+void handle_touch_event(const TouchEvent *event, void *context) {
+    TRACE("Touch event triggered: %ld", event->type);
+    switch (event->type) {
+        case TouchEvent_Touchdown:
+            DEBUG("Touchdown at %d, %d", event->x, event->y);
+            break;
+        case TouchEvent_PositionUpdate:
+            DEBUG("Move to %d, %d", event->x, event->y);
+            break;
+        case TouchEvent_Liftoff:
+            DEBUG("Liftoff at %d, %d", event->x, event->y);
+            break;
+  }
+}
+
 #ifndef PBL_COLOR
 
 static uint8_t breverse(uint8_t b);
@@ -2992,6 +3009,9 @@ static void init_cgm(void)
 	//subscribe to the battery handler
 	battery_state_service_subscribe(battery_handler);
 
+    /** touch part **/
+    init_touch();
+
 	// init the window pointer to NULL if it needs it
 	if (window_cgm != NULL)
 	{
@@ -3042,6 +3062,12 @@ static void deinit_cgm(void)
 	TRACE("DEINIT, UNSUBSCRIBE BLUETOOTH");
 	bluetooth_connection_service_unsubscribe();
 
+    TRACE("DEINIT, UNSUBSCRIBE TOUCH");
+    touch_service_unsubscribe();
+
+    TRACE("DEINIT UNSUBSCRIBE HEALTH");
+    health_service_events_unsubscribe();
+
 	battery_state_service_unsubscribe();
 
 	// cancel timers if they exist
@@ -3081,7 +3107,15 @@ static void deinit_cgm(void)
 
 	TRACE("DEINIT CODE OUT");
 } // end deinit_cgm
-  //
+  
+void init_touch(void) {
+    if (touch_service_is_enabled()) {
+        LOG("TOUCH enabled");
+        touch_service_subscribe(handle_touch_event, NULL);
+    } else {
+        LOG("TOUCH Disabled");
+    }
+}
 
 
 void update_layout(void) {
