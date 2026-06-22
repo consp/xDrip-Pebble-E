@@ -96,7 +96,7 @@
           "file": "images/err.png"
         },
         {
-          "characterRegex": "[0-9 ]",
+          "characterRegex": "[0-9❤]",
           "type": "font",
           "name": "GOTHAM_BOLD_32",
           "file": "GothamBold.ttf"

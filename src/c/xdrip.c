@@ -2268,12 +2268,12 @@ void handle_minute_tick_cgm(struct tm* tick_time_cgm, TimeUnits units_changed_cg
 
 
 void handle_heartrate_tick(HealthEventType event, void *context) {
-    static char heartrate_text[4]; // max 999\0, should be enough
+    static char heartrate_text[7]; // max 999\0, should be enough
     LOG("Health Tick: %lx", event);
     if (event == HealthEventHeartRateUpdate) {
         LOG("HR Update Event");
         HealthValue value = health_service_peek_current_value(HealthMetricHeartRateBPM);
-        snprintf(heartrate_text, 4, "% 3ld", value);
+        snprintf(heartrate_text, 7, "%3ld❤", value);
         text_layer_set_text(heartrate_layer, heartrate_text);
     }
 }
@@ -2591,7 +2591,7 @@ void window_load_cgm(Window *window_cgm)
 
     // only available on emery
     EMERY(
-        heartrate_layer = text_layer_create(GRect(4, 168, 70, 35));
+        heartrate_layer = text_layer_create(GRect(2, 168, 100, 35));
         text_layer_set_text_alignment(heartrate_layer, GTextAlignmentLeft);
     )
 #endif
