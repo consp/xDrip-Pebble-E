@@ -3,6 +3,10 @@
 #include "xdrip.h"
 #include "debug.h" // must be included after xdrip.h
 
+#ifdef ENABLE_TREND_RENDERER
+#include "api/trend.h"
+#endif
+
 #ifdef TEST_MODE
 #include "trend_testimages.h"
 #endif
@@ -107,6 +111,29 @@ BitmapLayer *bg_trend_layer = NULL;
 BitmapLayer *upper_face_layer = NULL;
 BitmapLayer *lower_face_layer = NULL;
 
+// trend config
+#ifdef ENABLE_TREND_RENDERER
+trend_config t_config = {
+    .bgl_type = BGL_TYPE_MG_DL,
+    .average_color = GColorOrange,
+    .good_color = GColorGreen,
+    .critical_color = GColorFromRGBA(255, 0, 0, 255),
+    .low_color = GColorBlue,
+    .high_color = GColorRed,
+    .high_line_color = (GColor) {.r = 3, .a = 2},
+    .low_line_color = (GColor) {.g = 3, .a = 2},
+    .bgl_average = 144,
+    .bgl_low = 72,
+    .bgl_high = 216,
+    .bgl_high_line = 216,
+    .bgl_low_line = 72,
+    .bgl_high_limit = 260,
+    .bgl_low_limit = 50,
+    .line_width = 2,
+    .trend_width = 2,
+};
+#endif
+
 #ifdef PBL_COLOR
 static GColor8 fg_colour;
 static GColor8 bg_colour;
@@ -143,6 +170,12 @@ TextLayer *step_count_text_layer = NULL;
 #if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_FLINT) || defined(PBL_PLATFORM_GABBRO)
 TextLayer *heart_rate_text_layer = NULL;
 #endif
+#endif
+
+//Health and Metric Display functions
+#ifdef PBL_HEALTH
+static void update_health_metric_displays();
+static void health_handler(HealthEventType event, void *context);
 #endif
 
 /**
@@ -1755,7 +1788,7 @@ void inbox_received_handler_cgm(DictionaryIterator *iterator, void *context)
 
 				if ((trend_buffer != NULL) && (trend_buffer_length > 0) && (trend_buffer_length == expected_trend_buffer_length))
 				{
-                    load_trend(trend_buffer, trend_buffer_length);
+                    //load_trend(trend_buffer, trend_buffer_length);
 				}
 				else
 				{
@@ -2698,7 +2731,18 @@ void window_load_cgm(Window *window_cgm)
 #endif
 	load_battlevel();
 #ifdef TEST_MODE
+#ifdef ENABLE_TREND_RENDERER
+    TRACE("Trend config and draw");
+    // default config
+    t_config.layer = (Layer *) bg_trend_layer;
+    t_config.bgl.index = 0;
+    t_config.bgl.size = 228;
+    t_config.bgl.values = trend_test_values;
+    trend_set_config(&t_config);
+    /* trend_draw(); */
+#else
     load_trend(trend_testimage_png, trend_testimage_png_len);
+#endif
 #endif
 
 //	TRACE("WINDOW LOAD, ABOUT TO CALL APP SYNC INIT");

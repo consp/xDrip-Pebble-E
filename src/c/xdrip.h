@@ -1,6 +1,6 @@
 //xdrip.h - file for all common defines and function prototypes used in xdrip.c
 #ifndef __XDRIP_H__
-#define __XDRIP_H
+#define __XDRIP_H__
 
 #include "constant.h"
 /**
@@ -16,14 +16,20 @@
 #define DEBUG_APP_INFO 1
 #define DEBUG_APP_NONE 0
 
-/* #define DEBUG_LEVEL DEBUG_APP_TRACE   */
+#define DEBUG_LEVEL DEBUG_APP_TRACE  
 
 /* The line below, if defined, will only indicate test values on the display.
 this is for testing purposes only until I can get the PebbleKit.JS code operating with the emulator.
 Make sure you udefine this before building a release.
 */
-/* #define TEST_MODE */
+#define TEST_MODE
 
+
+/** 
+ * Feature flags
+ */
+
+#define ENABLE_TREND_RENDERER
 
 /** 
  * Face name
@@ -108,9 +114,4 @@ time_t get_UTC_offset(struct tm *t);
 void updateColours();
 void load_trend(const uint8_t *png, int32_t png_length);
 
-//Health and Metric Display functions
-#ifdef PBL_HEALTH
-static void update_health_metric_displays();
-static void health_handler(HealthEventType event, void *context);
-#endif
 #endif // __XDRIP_H__
