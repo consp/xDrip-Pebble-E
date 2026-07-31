@@ -13,6 +13,11 @@ typedef enum {
     BGL_TYPE_MG_DL = 1
 } bgl_type;
 
+typedef enum {
+    TREND_STYLE_DOTS = 0,
+    TREND_STYLE_LINES = 1
+} trend_style;
+
 typedef struct {
     int16_t size;
     int16_t index;
@@ -40,6 +45,7 @@ typedef struct {
     int16_t     bgl_low_limit;
     Layer       *layer;
     bgl_array   bgl;
+    trend_style style;
 } trend_config;
 
 void trend_set_config(trend_config *cfg);

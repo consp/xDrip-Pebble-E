@@ -51,13 +51,40 @@ inline void draw_bgl_point(bgl_value value, int16_t x, trend_config *config, GRe
 
 }
 
+inline void draw_bgl_line(bgl_value value, bgl_value value2, int16_t x, trend_config *config, GRect bounds, GContext *ctx) {
+    /**
+     * Since the trend image is just a graph, we do not need to know the 
+     * actual type of data
+     */
+
+    GColor color = config->good_color;
+
+    if (value > config->bgl_high) color = config->high_color;
+    else if (value > config->bgl_average) color = config->average_color;
+    else if (value < config->bgl_low) color = config->low_color;
+
+    graphics_context_set_stroke_color(ctx, color);
+    
+    GPoint point = {x, BGL_TO_Y(value, config, bounds)};
+    GPoint point2 = {x+1, BGL_TO_Y(value2, config, bounds)};
+
+    graphics_draw_line(ctx, point, point2);
+
+}
+
 static bool draw_trend(trend_config *config, Layer *layer, GContext *ctx) {
     graphics_context_set_stroke_width(ctx, config->trend_width); // constant
 
     GRect bounds = layer_get_bounds(layer);
 
-    for (int i = 0; i < bounds.size.w; i++) {
-        draw_bgl_point(config->bgl.values[(config->bgl.index + i) % config->bgl.size], i, config, bounds, ctx); 
+    if (config->style == TREND_STYLE_DOTS) {
+        for (int i = 0; i < bounds.size.w; i++) {
+            draw_bgl_point(config->bgl.values[(config->bgl.index + i) % config->bgl.size], i, config, bounds, ctx); 
+        }
+    } else if (config->style == TREND_STYLE_LINES) {
+        for (int i = 0; i < bounds.size.w - 1; i++) {
+            draw_bgl_line(config->bgl.values[(config->bgl.index + i) % config->bgl.size], config->bgl.values[(config->bgl.index + i + 1) % config->bgl.size], i, config, bounds, ctx); 
+        }
     }
     return true;
 }
