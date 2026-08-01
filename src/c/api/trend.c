@@ -1,3 +1,7 @@
+/**
+ *
+ * Use as is. No guarantees.
+ */
 #include <pebble.h>
 
 #include "../xdrip.h"
@@ -13,8 +17,6 @@
  * - Draw all and aliase
  * - Color/gray(scale)
  * - Enable/disable high/low line
- * 
- * tbd:
  * - Set colors
  * - Set line colors
  */
@@ -24,18 +26,23 @@ static void trend_layer_callback(Layer *layer, GContext *ctx);
 trend_config *config = NULL;
 
 void trend_set_config(trend_config *cfg) {
-    TRACE(TREND_LOG "Loading config");
     config = cfg;
+    if (cfg == NULL) {
+        LOG("NULL configuration! Graph is disabled");
+        return;
+    }
     TRACE(TREND_LOG "Setting callback");
     layer_set_update_proc((Layer *) config->layer, trend_layer_callback);
 }
 
 
-inline void draw_bgl_point(bgl_value value, int16_t x, trend_config *config, GRect bounds, GContext *ctx) {
+static inline void draw_bgl_point(bgl_value value, int16_t x, trend_config *config, GRect bounds, GContext *ctx) {
     /**
      * Since the trend image is just a graph, we do not need to know the 
      * actual type of data
      */
+
+    if (value < config->bgl_low_limit || value > config->bgl_high_limit) return;
 
     GColor color = config->good_color;
 
@@ -160,17 +167,20 @@ static bool draw_trend_lines(trend_config  *config, Layer *layer, GContext *ctx)
     return true;
 }
 
- void trend_layer_callback(Layer *layer, GContext *ctx) {
-   TRACE(TREND_LOG "Layer callback"); 
-   TRACE(TREND_LOG "Drawing trend line");
-   draw_trend(config, layer, ctx);
-   TRACE(TREND_LOG "Drawing high/low lines");
-   draw_trend_lines(config, layer, ctx);
+void trend_layer_callback(Layer *layer, GContext *ctx) {
+    if (config == NULL) {
+        LOG("No trend configuration set, do nothing");
+        return; 
+    }
+    TRACE(TREND_LOG "Drawing trend line");
+    draw_trend(config, layer, ctx);
+    TRACE(TREND_LOG "Drawing high/low lines");
+    draw_trend_lines(config, layer, ctx);
 }
 
 void trend_draw(void) {
     if (config == NULL) {
-        INFO(TREND_LOG "No trend configuration set");
+        INFO(TREND_LOG "No trend configuration set, do nothing");
         return;
     }
     DEBUG(TREND_LOG "Marking trend layer dirty");
