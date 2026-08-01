@@ -67,6 +67,8 @@ static inline void draw_bgl_line(bgl_value value, bgl_value value2, int16_t x, t
     else if (value > config->bgl_average) color = config->average_color;
     else if (value < config->bgl_low) color = config->low_color;
 
+    color = COLOR_FALLBACK(color, GColorWhite); // b/w compatability
+
     graphics_context_set_stroke_color(ctx, color);
     
     GPoint point = {x, BGL_TO_Y(value, config, bounds)};
@@ -149,10 +151,10 @@ static bool draw_trend_lines(trend_config  *config, Layer *layer, GContext *ctx)
     TRACE(TREND_LOG " Draw lines, high: %d, low %d", h, l);
 
     // drawing
-    graphics_context_set_stroke_color(ctx, config->high_line_color);
+    graphics_context_set_stroke_color(ctx, COLOR_FALLBACK(config->high_line_color, GColorWhite));
     graphics_context_set_stroke_width(ctx, config->line_width);
     graphics_draw_line(ctx, (GPoint) { 0, h }, (GPoint) { bounds.size.w, h});
-    graphics_context_set_stroke_color(ctx, config->low_line_color);
+    graphics_context_set_stroke_color(ctx, COLOR_FALLBACK(config->low_line_color, GColorWhite));
     graphics_draw_line(ctx, (GPoint) { 0, l }, (GPoint) { bounds.size.w, l});
     
     return true;
