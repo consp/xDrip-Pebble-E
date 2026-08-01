@@ -18,6 +18,14 @@ typedef enum {
     TREND_STYLE_LINES = 1
 } trend_style;
 
+typedef enum {
+    TREND_LINE_STYLE_SOLID = 0,
+    TREND_LINE_STYLE_DOTTED,
+    TREND_LINE_STYLE_DOTTED_SPARSE,
+    TREND_LINE_STYLE_DASHED,
+    TREND_LINE_STYLE_DASHED_WIDE,
+} trend_line_style;
+
 typedef struct {
     int16_t size;
     int16_t index;
@@ -46,6 +54,7 @@ typedef struct {
     Layer       *layer;
     bgl_array   bgl;
     trend_style style;
+    trend_line_style line_style;
 } trend_config;
 
 void trend_set_config(trend_config *cfg);
