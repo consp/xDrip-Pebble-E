@@ -58,7 +58,7 @@ static inline void draw_bgl_point(bgl_value value, int16_t x, trend_config *conf
 
 }
 
-static inline void draw_bgl_line(bgl_value value, bgl_value value2, int16_t x, trend_config *config, GRect bounds, GContext *ctx) {
+static inline void draw_bgl_line(bgl_value value, bgl_value value2, int16_t x1, int16_t x2, trend_config *config, GRect bounds, GContext *ctx) {
     /**
      * Since the trend image is just a graph, we do not need to know the 
      * actual type of data
@@ -78,8 +78,8 @@ static inline void draw_bgl_line(bgl_value value, bgl_value value2, int16_t x, t
 
     graphics_context_set_stroke_color(ctx, color);
     
-    GPoint point = {x, BGL_TO_Y(value, config, bounds)};
-    GPoint point2 = {x+1, BGL_TO_Y(value2, config, bounds)};
+    GPoint point = {x1, BGL_TO_Y(value, config, bounds)};
+    GPoint point2 = {x2, BGL_TO_Y(value2, config, bounds)};
 
     graphics_draw_line(ctx, point, point2);
 
@@ -99,7 +99,7 @@ static bool draw_trend(trend_config *config, Layer *layer, GContext *ctx) {
 
     GRect bounds = layer_get_bounds(layer);
 
-    bool interp = (bounds.size.w > config->bgl.size); // larger not supproted
+    bool interp = config->style == TREND_STYLE_DOTS ? (bounds.size.w > config->bgl.size) : false; // do not interp on lines 
     int32_t t = 0;
     int32_t interval = (config->bgl.size << 16) / bounds.size.w;
     if (config->style == TREND_STYLE_LINES) interval = ((config->bgl.size - 1) << 16) / bounds.size.w;
@@ -125,32 +125,38 @@ static bool draw_trend(trend_config *config, Layer *layer, GContext *ctx) {
             }
         }
     } else if (config->style == TREND_STYLE_LINES) {
-        for (int i = 0; i < bounds.size.w; i++) {
-            if (interp) {
-                int16_t y0 = lerp(
-                        config->bgl.values[(config->bgl.index + index) % (config->bgl.size)], 
-                        config->bgl.values[(config->bgl.index + index + 1) % (config->bgl.size)], 
-                        t);
-                int16_t y1 = lerp(
-                        config->bgl.values[(config->bgl.index + index) % (config->bgl.size)], 
-                        config->bgl.values[(config->bgl.index + index + 1) % (config->bgl.size)], 
-                        t += interval);
-                /* TRACE(TREND_LOG "Line %d %d %d %d %d %d %d", */
-                /*         config->bgl.size, config->bgl.index, index, */
-                /*         y0, y1,  */
-                /*         config->bgl.values[(config->bgl.index + index) % (config->bgl.size)],  */
-                /*         config->bgl.values[(config->bgl.index + index + 1) % (config->bgl.size)]); */
-                draw_bgl_line(y0, y1, i, config, bounds, ctx);
-                if (t >= (1 << 16)) {
-                    index++;
-                    t %= 1 << 16;
-                    /* TRACE(TREND_LOG "Index: %hu of %hu, %hu", index, config->bgl.size, t); */
+        if (interp) {
+            for (int i = 0; i < bounds.size.w; i++) {
+                if (interp) {
+                    int16_t y0 = lerp(
+                            config->bgl.values[(config->bgl.index + index) % (config->bgl.size)], 
+                            config->bgl.values[(config->bgl.index + index + 1) % (config->bgl.size)], 
+                            t);
+                    int16_t y1 = lerp(
+                            config->bgl.values[(config->bgl.index + index) % (config->bgl.size)], 
+                            config->bgl.values[(config->bgl.index + index + 1) % (config->bgl.size)], 
+                            t += interval);
+                    /* TRACE(TREND_LOG "Line %d %d %d %d %d %d %d", */
+                    /*         config->bgl.size, config->bgl.index, index, */
+                    /*         y0, y1,  */
+                    /*         config->bgl.values[(config->bgl.index + index) % (config->bgl.size)],  */
+                    /*         config->bgl.values[(config->bgl.index + index + 1) % (config->bgl.size)]); */
+                    draw_bgl_line(y0, y1, i, i+1, config, bounds, ctx);
+                    if (t >= (1 << 16)) {
+                        index++;
+                        t %= 1 << 16;
+                        /* TRACE(TREND_LOG "Index: %hu of %hu, %hu", index, config->bgl.size, t); */
+                    }
                 }
-            } else {
+            }
+        } else {
+            // currently forced path
+            uint32_t t = (bounds.size.w << 16) / (config->bgl.size - 1); 
+            for (uint32_t i = 0, j = 0; i < ((uint32_t) bounds.size.w << 16); i += t, j++) {
                 draw_bgl_line(
-                        config->bgl.values[(config->bgl.index + i) % (config->bgl.size)],
-                        config->bgl.values[(config->bgl.index + i + 1) % (config->bgl.size)],
-                        i, config, bounds, ctx); 
+                        config->bgl.values[(config->bgl.index + j) % (config->bgl.size)],
+                        config->bgl.values[(config->bgl.index + j + 1) % (config->bgl.size)],
+                        i >> 16, (i+t) >> 16, config, bounds, ctx); 
             }
         }
     }
@@ -162,7 +168,7 @@ static bool draw_trend_lines(trend_config  *config, Layer *layer, GContext *ctx)
     GRect bounds = layer_get_bounds(layer);
     const int16_t h = BGL_TO_Y(config->bgl_high_line, config, bounds); 
     const int16_t l = BGL_TO_Y(config->bgl_low_line, config, bounds); 
-    TRACE(TREND_LOG " Draw lines, high: %d, low %d", h, l);
+    TRACE(TREND_LOG "Draw lines, high: %d, low %d", h, l);
 
     // drawing
     graphics_context_set_stroke_width(ctx, config->line_width);

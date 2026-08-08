@@ -1699,7 +1699,7 @@ void inbox_received_handler_cgm(DictionaryIterator *iterator, void *context)
 		LOG("inbox_received_handler_cgm: GLOBALLY LOCKED");
 		return;
 	}
-
+    int16_t *data16;
 
 	// CODE START
 
@@ -1851,7 +1851,7 @@ void inbox_received_handler_cgm(DictionaryIterator *iterator, void *context)
                 break;
             case CGM_TREND_DATA_NEW_KEY:
                 TRACE("New Trend data blob of size %d", data->length >> 1);
-                int16_t *data16 = (int16_t *) data->value->data;
+                data16 = (int16_t *) data->value->data;
                 for (int i = 0; i < data->length >> 1; i++) {
                     /* TRACE("TREND DATA: %d", *data16); */
                     t_config.bgl.values[t_config.bgl.index % (t_config.bgl.size)] = *data16++;
@@ -1867,8 +1867,9 @@ void inbox_received_handler_cgm(DictionaryIterator *iterator, void *context)
                 trend_draw();
                 break;
             case CGM_TREND_UPDATE_NEW_KEY:
-                TRACE("New Trend data update");
-                t_config.bgl.values[t_config.bgl.index % (t_config.bgl.size - 1)] = data->value->int16;
+                TRACE("New Trend data update: %hd", data->value->int16);
+                data16 = (int16_t *) data->value->data;
+                t_config.bgl.values[t_config.bgl.index % (t_config.bgl.size - 1)] = *data16;
                 t_config.bgl.index++;
                 t_config.bgl.index = t_config.bgl.index % (t_config.bgl.size - 1);
                 trend_draw();
