@@ -2,6 +2,42 @@
 #include "xdrip.h"
 #include "debug.h" // must be included after xdrip.h
 
+
+#ifdef ENABLE_TREND_RENDERER
+#include "api/trend.h"
+#endif
+
+#ifdef TEST_MODE
+#include "trend_testimages.h"
+#endif
+
+
+// trend config
+#ifdef ENABLE_TREND_RENDERER
+trend_config t_config = {
+    .bgl_type = BGL_TYPE_MG_DL,
+    .average_color = GColorOrange,
+    .good_color = GColorGreen,
+    .critical_color = GColorFromRGBA(255, 0, 0, 255),
+    .low_color = GColorBlue,
+    .high_color = GColorRed,
+    .high_line_color = (GColor) {.r = 3, .a = 2},
+    .low_line_color = (GColor) {.g = 3, .a = 2},
+    .bgl_average = 126,
+    .bgl_low = 72,
+    .bgl_high = 216,
+    .bgl_high_line = 216,
+    .bgl_low_line = 72,
+    .bgl_high_limit = 270,
+    .bgl_low_limit = 36,
+    .line_width = 2,
+    .trend_width = 4,
+    .style = TREND_STYLE_LINES,
+    .line_style = TREND_LINE_STYLE_DASHED_WIDE,
+};
+#endif
+
+
 /**
  * Variables
  */
@@ -117,7 +153,7 @@ GBitmap *appicon_bitmap = NULL;
 GBitmap *specialvalue_bitmap = NULL;
 GBitmap *bg_trend_bitmap = NULL;
 
-static char time_watch_format[9] = TIME_24H_FORMAT;
+static char time_watch_format[11] = TIME_24H_FORMAT;
 static char time_watch_text[] = "00:00:00";
 static char date_app_text[] = "Wed 13 Jan";
 static char message_layer_text[13];
@@ -1570,8 +1606,20 @@ static void send_cmd_cgm(void)
 
 	//set up the trend size and colour depth to send.  Note: Gabbro requires PNG8/64 colours, so we set the MSbit to true for that platform.
 	trend_size = (uint32_t)((PBL_DISPLAY_WIDTH << 8) | TREND_HEIGHT);
-#ifdef PBL_PLATFORM_GABBRO
+
+#if defined(PBL_PLATFORM_GABBRO) && !defined(ENABLE_TREND_RENDERER)
 	trend_size = trend_size || 0x80000000;
+#elif defined(ENABLE_TREND_RENDERER)
+    // fetch trend, fetch complete if no values available
+    trend_size = 0x40000000;
+    if (t_config.bgl.initialized == 0) {
+        TRACE("-----------------> Requesting entire trend update");
+        trend_size |= 0x20000000;
+        trend_size |= sizeof(t_config.bgl.values) >> 1;
+    } else {
+        TRACE("-----------------> Requesting partial");
+        trend_size |= 1;
+    }
 #endif
 	sendcmd_openerr = app_message_outbox_begin(&iter);
 	if(BluetoothAlert)
@@ -1795,6 +1843,36 @@ void inbox_received_handler_cgm(DictionaryIterator *iterator, void *context)
 					trend_buffer = NULL;
 				}
 			break;
+            case CGM_TREND_BEGIN_NEW_KEY:
+                TRACE("New Trend data begin");
+				expected_trend_buffer_length = data->value->uint16;
+				LOG("TREND_BEGIN; About to receive Trend data of %i size.", expected_trend_buffer_length);
+                t_config.bgl.size = expected_trend_buffer_length;
+                break;
+            case CGM_TREND_DATA_NEW_KEY:
+                TRACE("New Trend data blob of size %d", data->length >> 1);
+                int16_t *data16 = (int16_t *) data->value->data;
+                for (int i = 0; i < data->length >> 1; i++) {
+                    /* TRACE("TREND DATA: %d", *data16); */
+                    t_config.bgl.values[t_config.bgl.index % (t_config.bgl.size)] = *data16++;
+                    t_config.bgl.index++;
+                    t_config.bgl.index = t_config.bgl.index % (t_config.bgl.size);
+                }
+                /* if (data->length < 100 && t_config.bgl.initialized == 0) t_config.bgl.initialized = 1; */
+                break;
+            case CGM_TREND_END_NEW_KEY:
+                TRACE("New Trend data end");
+                t_config.bgl.initialized = 1;
+                // draw trend
+                trend_draw();
+                break;
+            case CGM_TREND_UPDATE_NEW_KEY:
+                TRACE("New Trend data update");
+                t_config.bgl.values[t_config.bgl.index % (t_config.bgl.size - 1)] = data->value->int16;
+                t_config.bgl.index++;
+                t_config.bgl.index = t_config.bgl.index % (t_config.bgl.size - 1);
+                trend_draw();
+                break;
 
 			case CGM_MESSAGE_KEY:
 				LOG("Got Message Key, message is \"%s\"", data->value->cstring);
@@ -1827,7 +1905,7 @@ void inbox_received_handler_cgm(DictionaryIterator *iterator, void *context)
 
 			case CGM_VIBE_KEY:
 				LOG("Got Vibe Key, message is \"%u\"", data->value->uint8);
-				if((data->value->uint8 > 0 || data->value->uint8 <4) && ! BluetoothAlert)
+				if((data->value->uint8 < 4) && ! BluetoothAlert)
 				{
 					alert_handler_cgm(data->value->uint8);
 				}
@@ -2696,6 +2774,16 @@ void window_load_cgm(Window *window_cgm)
 	text_layer_set_background_color(bottom_right_text_layer, GColorClear);
 	text_layer_set_font(bottom_right_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
 	layer_add_child(window_layer_cgm, text_layer_get_layer(bottom_right_text_layer));
+
+#ifdef ENABLE_TREND_RENDERER
+    TRACE("=======>>>>> Trend config and draw");
+    // default config
+    t_config.layer = (Layer *) bg_trend_layer;
+    t_config.bgl.index = 0;
+    t_config.bgl.initialized = 0;
+    trend_set_config(&t_config);
+    /* trend_draw(); */
+#endif
 
 	// prep for battery display, even if we don't have one.
 	BatteryChargeState charge_state=battery_state_service_peek();

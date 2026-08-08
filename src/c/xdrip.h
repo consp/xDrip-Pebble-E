@@ -1,6 +1,6 @@
 //xdrip.h - file for all common defines and function prototypes used in xdrip.c
 #ifndef __XDRIP_H__
-#define __XDRIP_H
+#define __XDRIP_H__
 
 #include "constant.h"
 /**
@@ -24,6 +24,10 @@ Make sure you udefine this before building a release.
 */
 /* #define TEST_MODE */
 
+/**
+ * Feature flags
+ */
+#define ENABLE_TREND_RENDERER
 
 /** 
  * Face name
@@ -84,7 +88,10 @@ static void bitmapLayerUpdate(struct Layer *layer, GContext *ctx);
 #define PBL_TREND_PERIOD		1005	// key pebble will use to send the trend period it wants.
 #define PBL_DISP_OPTS			1006	// key pebble will use to send display options (delta/arrows).
 #define PBL_VIBE_OPTS			1007	// key pebble will use to send vibration options (alerts, missed signal, no bluetooth)
-
+#define CGM_TREND_BEGIN_NEW_KEY 2000
+#define CGM_TREND_DATA_NEW_KEY  2001
+#define CGM_TREND_END_NEW_KEY   2002
+#define CGM_TREND_UPDATE_NEW_KEY 2003
 
 // TOTAL MESSAGE DATA 4x3+2+5+3+9 = 31 BYTES
 // TOTAL KEY HEADER DATA (STRINGS) 4x6+2 = 26 BYTES
