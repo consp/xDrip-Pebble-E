@@ -19,12 +19,17 @@
 #define FRAMEWORK_BGL_SERIES        2009
 #define FRAMEWORK_PNG_IMAGE         2010
 #define FRAMEWORK_BWP_VALUE         2011
-#define FRAMEWORK_SENSOR_TIME_LEFT  2012
+#define FRAMEWORK_SENSOR_INFO       2012
 // watch->phone: current health metrics, sent as plain uint32 values so the
 // phone side can decode them with PebbleKit without a struct layout. A zero
 // value means "not available" and is not written. See comm_send_health().
 #define FRAMEWORK_HEALTH_HR         2013
 #define FRAMEWORK_HEALTH_STEPS      2014
+
+#define SENSOR_STATE_ACTIVE         0
+#define SENSOR_STATE_WARMUP         1
+#define SENSOR_STATE_EXPIRED        2
+#define SENSOR_STATE_UNKNOWN        255
 
 /**
  * Struct definitions for communication
@@ -137,8 +142,12 @@ typedef struct {
     uint8_t  data[];            // PNG data blob
 } comm_png_data;
 
+typedef struct {
+    uint32_t start;             // Start time of the sensor
+    uint32_t remaining;         // Remaining sensor time 
+    uint8_t  state;             // Sensor state
+} comm_sensor_info;
 
-typedef uint32_t comm_sensor_time_left; // Not implemented
 typedef uint32_t comm_bwp_value;        // Not implemented
 
 typedef struct comm_health_t {
@@ -167,7 +176,7 @@ typedef struct comm_callback_t {
     void (*bgl_value)(comm_bgl_value value);
     void (*bgl_timestamp)(uint32_t timestamp);
     void (*bwp_value)(comm_bwp_value value);
-    void (*sensor_time_left)(comm_sensor_time_left value);
+    void (*sensor_info)(comm_sensor_info *value);
     void (*png)(comm_png_data *data);
     void (*health)(comm_health value);
 } comm_callback;
@@ -191,4 +200,16 @@ void comm_request_png(DictionaryIterator *iter, GRect bounds);
 // health data without duplicating the key layout. Independent of send_cmd_cgm,
 // which is not guaranteed to run under the framework.
 void comm_send_health(DictionaryIterator *iter, comm_health data);
+
+/**
+ * Send a heartbeat to xdrip
+ */
+void comm_request_heartbeat(
+        DictionaryIterator *iter,
+        bool use_png, Layer *pnglayer,
+        bool update_lines,
+        bool update_cgm, uint32_t current_cgm_time, 
+        bool update_battery,
+        bool update_sensor
+);
 #endif // __COMMUNICATION_H__

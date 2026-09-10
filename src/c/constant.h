@@ -5,11 +5,12 @@
 #include <pebble.h>
 
 // Metric Display defines
-#define METRIC_NONE		0
-#define METRIC_PHONEBATT	1
-#define METRIC_WATCHBATT	2
-#define METRIC_STEPS		3
-#define METRIC_HEARTRATE	4
+#define METRIC_NONE		     0
+#define METRIC_PHONEBATT	 1
+#define METRIC_WATCHBATT	 2
+#define METRIC_STEPS		 3
+#define METRIC_HEARTRATE	 4
+#define METRIC_SENSOR_EXPIRY 5
 
 // platform defines
 #ifdef PBL_PLATFORM_APLITE

@@ -64,9 +64,9 @@ void comm_handle(Tuple *data) {
             TRACE(CM "PNG image data");
             if (cb->png != NULL) cb->png((comm_png_data *) data->value->data);
             break;
-        case FRAMEWORK_SENSOR_TIME_LEFT:
-            TRACE(CM "Sensor expiry time left");
-            if (cb->sensor_time_left != NULL) cb->sensor_time_left(data->value->uint32);
+        case FRAMEWORK_SENSOR_INFO:
+            TRACE(CM "Sensor info");
+            if (cb->sensor_info != NULL) cb->sensor_info((comm_sensor_info *) data->value->data);
             break;
         case FRAMEWORK_BWP_VALUE:
             TRACE(CM "Bolus wizard previes value");
@@ -104,6 +104,65 @@ void comm_request_png(DictionaryIterator *iter, GRect bounds) {
     ts.rgb8 = 1;
 #endif
     dict_write_uint32(iter, FRAMEWORK_PNG_IMAGE, ts.raw);
+}
+
+extern uint32_t current_cgm_time; // for now steal time, we could track it locally though
+
+void comm_request_heartbeat(
+        DictionaryIterator *iter,
+        bool use_png, Layer *pnglayer,
+        bool update_lines,
+        bool update_cgm, uint32_t current_cgm_time, 
+        bool update_battery,
+        bool update_sensor
+) {
+	comm_heartbeat hb = {0}; // force zero init
+
+    // send if we are a colour pebble or not 
+#ifdef PBL_COLOR
+	hb.colour = 1;
+#else 
+	hb.colour = 0;
+#endif
+
+	hb.time_series = use_png ? 0 : 1;
+
+    // currently not used
+#ifdef PBL_PLATFORM_GABBRO
+	hb.time_period = 1;
+#else
+	hb.time_period = 3;
+#endif
+
+	// trend line and limit values
+	if (update_lines) { 
+		hb.high_limit = 1;
+		hb.low_limit = 1;
+	}
+
+	// pump values
+    // these are currently not implemented in xdrip
+	/* hb.send_iob = 1; */
+	/* hb.send_pump_state = 1; */
+	/* hb.send_pump_battery = 1; */
+   
+
+    // update cgm triggers quite a bit of data, it at least requires the delta and slope
+    // xdrip decides what to send with respect to the CGM_TIME and if use_png is set or not
+    // Due to xdrip possibly not knowing what the state of the screen is the png size is also
+    // send to xdrip
+	if (update_cgm) {
+		hb.send_slope_arrow = 1;
+		hb.send_delta_value = 1;
+		dict_write_uint32(iter, FRAMEWORK_BGL_VALUE, current_cgm_time); // request update
+		if (use_png && pnglayer != NULL) {
+			comm_request_png(iter, layer_get_bounds(pnglayer));
+		}
+	}
+
+	if (update_battery) hb.send_phone_battery = 1;
+
+	dict_write_uint32(iter, FRAMEWORK_HEARTBEAT, hb.raw);
 }
 
 #ifdef PBL_HEALTH

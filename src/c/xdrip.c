@@ -1633,46 +1633,15 @@ static void send_cmd_cgm(void)
 		// proceed to send since it's the only way to recover
 		goto send_appmsg;
 	}
-	comm_heartbeat hb;
-	hb.raw = 0; // reset
 
-#ifdef PBL_COLOR
-	hb.colour = 1;
-#else 
-	hb.colour = 0;
-#endif
-
-	hb.time_series = use_png ? 0 : 1;
-#ifdef PBL_PLATFORM_GABBRO
-	hb.time_period = 1;
-#else
-	hb.time_period = 3;
-#endif
-
-	// trend values
-	if (!trend_isinitialized() && !use_png) { 
-		hb.high_limit = 1;
-		hb.low_limit = 1;
-	}
-
-	// delta + pump values
-	/* hb.send_iob = 1; */
-	/* hb.send_pump_state = 1; */
-	/* hb.send_pump_battery = 1; */
-   
-	// function is called when BGL times out, send data if more than 5 mins ago
-	if (dirty.need_cgm) {
-		hb.send_slope_arrow = 1;
-		hb.send_delta_value = 1;
-		dict_write_uint32(iter, FRAMEWORK_BGL_VALUE, current_cgm_time); // request update
-		if (use_png) {
-			comm_request_png(iter, layer_get_bounds(bitmap_layer_get_layer(bg_trend_layer_png)));
-		}
-	}
-
-	if (bottom_right_metric == METRIC_PHONEBATT || bottom_left_metric == METRIC_PHONEBATT) hb.send_phone_battery = 1;
-
-	dict_write_uint32(iter, FRAMEWORK_HEARTBEAT, hb.raw);
+    comm_request_heartbeat(
+            iter,
+            use_png, bitmap_layer_get_layer(bg_trend_layer_png),
+            !trend_isinitialized() && !use_png,
+            dirty.need_cgm, current_cgm_time,
+            bottom_right_metric == METRIC_PHONEBATT || bottom_left_metric == METRIC_PHONEBATT,
+            bottom_right_metric == METRIC_SENSOR_EXPIRY || bottom_left_metric == METRIC_SENSOR_EXPIRY
+    );
 
 	dict_write_end(iter);
 
@@ -1683,7 +1652,6 @@ send_appmsg:
 	{
 		ERROR("send_cmd_cgm: ERR CODE: %i RES: %s", sendcmd_senderr, translate_app_error(sendcmd_senderr));
 	}
-	//free(iter);
 	TRACE("send_cmd_cgm: done");
 } // end send_cmd_cgm
 
