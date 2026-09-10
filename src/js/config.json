@@ -118,7 +118,11 @@
 				{
 					"label": "Step Count",
 					"value": 3
-				}
+				},
+                {
+					"label": "Sensor time left",
+					"value": 5
+                }
 			]
 		  },
 		  { 
@@ -147,7 +151,11 @@
 				{
 					"label": "Heart Rate",
 					"value": 4
-				}
+				},
+                {
+					"label": "Sensor time left",
+					"value": 5
+                }
 			]
 		  },
 		  {
@@ -193,7 +201,11 @@
 				{
 					"label": "Step Count",
 					"value": 3
-				}
+				},
+                {
+					"label": "Sensor time left",
+					"value": 5
+                }
 			]
 		  },
 		  {
@@ -222,7 +234,11 @@
 				{
 					"label": "Heart Rate",
 					"value": 4
-				}
+				},
+                {
+					"label": "Sensor time left",
+					"value": 5
+                }
 			]
 		  },
 		  {
@@ -247,7 +263,11 @@
 				{
 					"label": "Step Count",
 					"value": 3 
-				}
+				},
+                {
+					"label": "Sensor time left",
+					"value": 5
+                }
 			  ]
 		  },
 		  {
@@ -273,10 +293,10 @@
 					"label": "Step Count",
 					"value": 3
 				},
-				{
-					"label": "Heart Rate",
-					"value": 4
-				}
+                {
+					"label": "Sensor time left",
+					"value": 5
+                }
 			]
 		  }
 		]

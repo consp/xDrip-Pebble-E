@@ -84,7 +84,11 @@
 
 
 // BATTERY LEVEL FORMATTED SIZE used for Bridge/Phone and Watch battery indications
-#define BATTLEVEL_FORMATTED_SIZE 8
+#if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_GABBRO)
+#define BATTLEVEL_FORMATTED_SIZE 12
+#else
+#define BATTLEVEL_FORMATTED_SIZE 9
+#endif
 
 // global constants for time durations
 #define MINUTEAGO ((uint8_t) 60)

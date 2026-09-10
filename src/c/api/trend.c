@@ -313,7 +313,7 @@ static bool draw_trend_lines(Layer *layer, GContext *ctx) {
     }
     s = 0;
     w = 0;
-    ERROR("%d", config.hour_line_width);
+
     graphics_context_set_stroke_width(ctx, config.hour_line_width);
     graphics_context_set_stroke_color(ctx, COLOR_FALLBACK(config.hour_line_color, GColorWhite));
     graphics_context_set_fill_color(ctx, COLOR_FALLBACK(config.hour_line_color, GColorWhite));

@@ -62,11 +62,12 @@ typedef union comm_heartbeat_t {
         // B2-3
         uint32_t : 16;                  // RFU
         // B1
-        uint32_t : 3;
+        uint32_t : 2;
+        uint32_t send_sensor_info : 1;  // Send sensor info values
         uint32_t send_slope_arrow : 1;  // Send slope arrow value
         uint32_t send_delta_value : 1;  // Send delta value
         uint32_t send_pump_battery : 1; // Send battery state
-        uint32_t send_phone_battery : 1; // 
+        uint32_t send_phone_battery : 1; // Send phone battery state 
         uint32_t send_pump_state : 1;   // Send pump state
         // B0
         uint32_t send_iob : 1;          // Send IOB data
@@ -120,13 +121,14 @@ typedef struct comm_message_t {
     char    *message;       // Message, MUST BE A UTF-8 encoded null terminated cstring
 } comm_message;
 
-typedef union  {
+typedef union {
     struct {
         uint16_t high_line;     // High line value in mg/dl
         uint16_t high_limit;    // High limit in mg/dl (usually either what user set or 400)
     };
     uint32_t raw;               // Convenience blob
 } comm_high_limit;
+
 typedef union {
     struct {
         uint16_t low_line;      // Low line value in mg/dl
@@ -144,7 +146,7 @@ typedef struct {
 
 typedef struct {
     uint32_t start;             // Start time of the sensor
-    uint32_t remaining;         // Remaining sensor time 
+    uint32_t end;         // Remaining sensor time 
     uint8_t  state;             // Sensor state
 } comm_sensor_info;
 

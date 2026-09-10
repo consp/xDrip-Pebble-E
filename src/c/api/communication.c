@@ -160,6 +160,10 @@ void comm_request_heartbeat(
 		}
 	}
 
+    if (update_sensor) {
+        hb.send_sensor_info = 1;
+    }
+
 	if (update_battery) hb.send_phone_battery = 1;
 
 	dict_write_uint32(iter, FRAMEWORK_HEARTBEAT, hb.raw);

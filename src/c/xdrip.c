@@ -1,6 +1,7 @@
 #include <pebble.h>
 #include <stdarg.h>
 #include "xdrip.h" // set DEBUG_LEVEL in here or on the pebble build command line
+#include "constant.h"
 #include "debug.h" // must be included after xdrip.h
 #include "api/communication.h"
 #ifdef ENABLE_TREND_RENDERER
@@ -42,6 +43,7 @@ static char last_bg[6];
 static uint32_t last_battlevel = 100;
 static uint32_t current_cgm_time = 0;
 static uint32_t current_app_time = 0;
+static uint32_t sensor_end_time = 0;
 static char current_bg_delta[14];
 #ifdef PBL_HEALTH
 static int current_step_count = 0;
@@ -176,6 +178,7 @@ void set_bgl_data(comm_bgl_data *value);
 void set_bgl_series(comm_bgl_series *series); 
 void set_png(comm_png_data *data);
 void set_message(comm_message message);
+void set_sensor_info(comm_sensor_info *value);
 #endif
 
 
@@ -187,6 +190,7 @@ typedef struct {
 	uint32_t need_cgm : 1;  // make the heartbeat request delta and slope
 	uint32_t step_count : 1;
 	uint32_t hbm : 1;
+    uint32_t sensor_info : 1;
 } dirty_markers;
 
 dirty_markers dirty = {
@@ -194,6 +198,7 @@ dirty_markers dirty = {
 	.need_cgm = 1,
 	.step_count = 0,
 	.hbm = 1,
+    .sensor_info = 1
 }; // init one 
 
 /**
@@ -395,61 +400,61 @@ void update_health_metric_displays() {
 	// If there are no health metrics to display, do nothing and return.
 	if(bottom_left_metric != METRIC_STEPS && bottom_right_metric != METRIC_STEPS && bottom_left_metric != METRIC_HEARTRATE && bottom_right_metric != METRIC_HEARTRATE) return;
 
-	if(bottom_left_metric == METRIC_STEPS || bottom_right_metric == METRIC_STEPS) {
-		HealthMetric metric = HealthMetricStepCount;
-		time_t start = time_start_of_today();
-		time_t end = time(NULL);
+    if(bottom_left_metric == METRIC_STEPS || bottom_right_metric == METRIC_STEPS) {
+        HealthMetric metric = HealthMetricStepCount;
+        time_t start = time_start_of_today();
+        time_t end = time(NULL);
 
-		// Check the metric has data available for today
-		HealthServiceAccessibilityMask mask = health_service_metric_accessible(metric, start, end);
+        // Check the metric has data available for today
+        HealthServiceAccessibilityMask mask = health_service_metric_accessible(metric, start, end);
 
-		if(mask & HealthServiceAccessibilityMaskAvailable) {
-			// Data is available!
-			step_count = health_service_sum_today(metric);
-			if (step_count != current_step_count)  {
-				dirty.step_count = 1;
-				current_step_count = step_count;
-				LOG("Steps today: %d", step_count);
-				snprintf(step_count_text,8, "%i s", step_count);
-			}
-		} else {
-			// No data recorded yet today
-			LOG("Data unavailable!");
-		}
-		if(bottom_left_metric == METRIC_STEPS && dirty.step_count) {
-		 	text_layer_set_text(bottom_left_text_layer, step_count_text);
-			dirty.step_count = 0;
-		}
-		if(bottom_right_metric == METRIC_STEPS && dirty.step_count) {
-			text_layer_set_text(bottom_right_text_layer, step_count_text);
-			dirty.step_count = 0;
-		}
-	}	
+        if(mask & HealthServiceAccessibilityMaskAvailable) {
+            // Data is available!
+            step_count = health_service_sum_today(metric);
+            if (step_count != current_step_count)  {
+                dirty.step_count = 1;
+                current_step_count = step_count;
+                LOG("Steps today: %d", step_count);
+                snprintf(step_count_text,8, "%i s", step_count);
+            }
+        } else {
+            // No data recorded yet today
+            LOG("Data unavailable!");
+        }
+        if(bottom_left_metric == METRIC_STEPS && dirty.step_count) {
+            text_layer_set_text(bottom_left_text_layer, step_count_text);
+            dirty.step_count = 0;
+        }
+        if(bottom_right_metric == METRIC_STEPS && dirty.step_count) {
+            text_layer_set_text(bottom_right_text_layer, step_count_text);
+            dirty.step_count = 0;
+        }
+    }	
 #if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_FLINT)
-	if(bottom_left_metric == METRIC_HEARTRATE || bottom_right_metric == METRIC_HEARTRATE) {
-		HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
-		HealthValue val = health_service_peek_current_value(HealthMetricHeartRateBPM);
-		LOG("Heart Rate data is \"%lu\"", (uint32_t)val);
-		if (hr & HealthServiceAccessibilityMaskAvailable || (val != 0 && val != current_hbm)) {
+    if(bottom_left_metric == METRIC_HEARTRATE || bottom_right_metric == METRIC_HEARTRATE) {
+        HealthServiceAccessibilityMask hr = health_service_metric_accessible(HealthMetricHeartRateBPM, time(NULL), time(NULL));
+        HealthValue val = health_service_peek_current_value(HealthMetricHeartRateBPM);
+        LOG("Heart Rate data is \"%lu\"", (uint32_t)val);
+        if (hr & HealthServiceAccessibilityMaskAvailable || (val != 0 && val != current_hbm)) {
             // value can either be changed or new available, check if changed then update (e.g. initial condition) 
-			if(val > 0 && val != current_hbm) {
-				// Display HRM value
-				current_hbm = val;
-				dirty.hbm = 1;
-				snprintf(s_hrm_buffer, sizeof(s_hrm_buffer), "%lu \U0001F493", (uint32_t)val);
-			}
-		} else if (current_hbm == 0) {
+            if(val > 0 && val != current_hbm) {
+                // Display HRM value
+                current_hbm = val;
+                dirty.hbm = 1;
+                snprintf(s_hrm_buffer, sizeof(s_hrm_buffer), "%lu \U0001F493", (uint32_t)val);
+            }
+        } else if (current_hbm == 0) {
             dirty.hbm = 1;
-			snprintf(s_hrm_buffer, sizeof(s_hrm_buffer), "Wait.. \U0001F493");
-		}
+            snprintf(s_hrm_buffer, sizeof(s_hrm_buffer), "Wait.. \U0001F493");
+        }
 
-		if (dirty.hbm && (hr_draw_timer == NULL || !app_timer_reschedule(hr_draw_timer, 1000))) {
-			hr_draw_timer = app_timer_register(1000, hr_draw_callback, NULL);
-		}
-	}
+        if (dirty.hbm && (hr_draw_timer == NULL || !app_timer_reschedule(hr_draw_timer, 1000))) {
+            hr_draw_timer = app_timer_register(1000, hr_draw_callback, NULL);
+        }
+    }
 #endif
-
 }
+
 
 // health_poll - peek the current heart rate and step total into health_hr /
 // health_steps. PebbleOS does not reliably emit HealthEventHeartRateUpdate at
@@ -508,11 +513,29 @@ static void health_schedule_send(void) {
 }
 #endif
 
+void update_sensor_info_displays(void) {
+    if ((bottom_left_metric == METRIC_SENSOR_EXPIRY || bottom_right_metric == METRIC_SENSOR_EXPIRY) && dirty.sensor_info) {
+        static char sensor_info_text[10] = { 0xF0, 0x9F, 0x8C, 0x99 }; // crecent moon unicode U+1F319
+        // convert to days/hours/minutes
+        int32_t remaining = sensor_end_time - time(NULL);
+        // we ignore truncation warnings since the time left cannot be more than two characters
+        // change sensor text length once sensors can last > 99 days
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+        if (remaining > 86400) snprintf(sensor_info_text + 4, sizeof(sensor_info_text) - 4, "%2ld d", remaining / 86400); 
+        else if ((remaining % 86400) > 3600) snprintf(sensor_info_text + 4, sizeof(sensor_info_text) - 4, "%2ld h", (remaining % 86400) / 3600); 
+        else if ((remaining % 60) > 0) snprintf(sensor_info_text + 4, sizeof(sensor_info_text) - 4, "%2ld m", (remaining % 3600) / 60);
+        else snprintf(sensor_info_text, sizeof(sensor_info_text), "exp");
+#pragma GCC diagnostic pop
+        text_layer_set_text(bottom_left_metric == METRIC_SENSOR_EXPIRY ? bottom_left_text_layer : bottom_right_text_layer, sensor_info_text);
+    }
+}
+
 // battery_handler - updates the pebble battery percentage.
 static void battery_handler(BatteryChargeState charge_state)
 {
 
-	static char watch_battlevel_percent[9];
+	static char watch_battlevel_percent[11]; // extended for unicode support
 	// If there are no battery level metric display elements, exit
 	if(bottom_left_metric != METRIC_WATCHBATT && bottom_right_metric != METRIC_WATCHBATT) {
 		return;
@@ -520,12 +543,16 @@ static void battery_handler(BatteryChargeState charge_state)
 
 #ifdef PBL_COLOR 
 	#ifdef PBL_ROUND
-	snprintf(watch_battlevel_percent, BATTLEVEL_FORMATTED_SIZE, "%i%% ", charge_state.charge_percent);
+	snprintf(watch_battlevel_percent, sizeof(watch_battlevel_percent), "%i%% ", charge_state.charge_percent);
 	#else
-	snprintf(watch_battlevel_percent, BATTLEVEL_FORMATTED_SIZE, "W:%i%% ", charge_state.charge_percent);
+#if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_GABBRO)
+	snprintf(watch_battlevel_percent, sizeof(watch_battlevel_percent), "\U0001F50B %i%% ", charge_state.charge_percent);
+#else
+	snprintf(watch_battlevel_percent, sizeof(watch_battlevel_percent), "W:%i%% ", charge_state.charge_percent);
+#endif
 	#endif
 #else
-	snprintf(watch_battlevel_percent, BATTLEVEL_FORMATTED_SIZE, "W:%i%%", charge_state.charge_percent);
+	snprintf(watch_battlevel_percent, sizeof(watch_battlevel_percent), "W:%i%%", charge_state.charge_percent);
 #endif
 	LOG(" battery_handler: watch_battlevel_percent: %s", watch_battlevel_percent);
 	LOG(" battery_handler: BackLightOnCharge: %u", BacklightOnCharge);
@@ -1487,12 +1514,18 @@ static void load_battlevel()
 	TRACE("load_battlevel: START");
 
 	// CONSTANTS
+#if defined(PBL_PLATFORM_EMERY) || defined(PBL_PLATFORM_GABBRO)
+#define PHONE_EMOJI "\U0001F4F1"
+#else
+    // phone emoji is not available on older versions
+#define PHONE_EMOJI " B:"
+#endif
 
 
 	// VARIABLES
 	// NOTE: buffers have to be static and hardcoded
 	uint32_t current_battlevel = 0;
-	static char battlevel_percent[9];
+	static char battlevel_percent[BATTLEVEL_FORMATTED_SIZE];
 
 	// CODE START
 	//Deterime if a metric text layer is configured for phone battery
@@ -1515,8 +1548,8 @@ static void load_battlevel()
 	{
 		// Zero battery level; set here, so if we get zero later we know we have an error instead
 		INFO("load_battlevel: 0 value");
-		if(bottom_left_metric == METRIC_PHONEBATT) text_layer_set_text(bottom_left_text_layer, "0%");
-		if(bottom_right_metric == METRIC_PHONEBATT) text_layer_set_text(bottom_right_text_layer, "0%");
+		if(bottom_left_metric == METRIC_PHONEBATT) text_layer_set_text(bottom_left_text_layer, PHONE_EMOJI "0%");
+		if(bottom_right_metric == METRIC_PHONEBATT) text_layer_set_text(bottom_right_text_layer, PHONE_EMOJI "0%");
 		if (!LowBatteryAlert)
 		{
 			INFO("load_battlevel: 0 value, vibe");
@@ -1539,8 +1572,8 @@ static void load_battlevel()
 	{
 		// got a negative or out of bounds or error battery level
 		INFO("load_battlevel: error");
-		if(bottom_left_metric == METRIC_PHONEBATT) text_layer_set_text(bottom_left_text_layer, "ERR");
-		if(bottom_right_metric == METRIC_PHONEBATT) text_layer_set_text(bottom_right_text_layer, "ERR");
+		if(bottom_left_metric == METRIC_PHONEBATT) text_layer_set_text(bottom_left_text_layer, PHONE_EMOJI "ERR");
+		if(bottom_right_metric == METRIC_PHONEBATT) text_layer_set_text(bottom_right_text_layer, PHONE_EMOJI "ERR");
 		return;
 	}
 
@@ -1548,7 +1581,7 @@ static void load_battlevel()
 #ifdef PBL_ROUND
 	snprintf(battlevel_percent, BATTLEVEL_FORMATTED_SIZE, " %lu%%", current_battlevel);
 #elif PBL_COLOR
-	snprintf(battlevel_percent, BATTLEVEL_FORMATTED_SIZE, " B:%lu%%", current_battlevel);
+	snprintf(battlevel_percent, BATTLEVEL_FORMATTED_SIZE, PHONE_EMOJI " %lu%%", current_battlevel);
 #else
 	snprintf(battlevel_percent, BATTLEVEL_FORMATTED_SIZE, "B:%lu%%", current_battlevel);
 #endif
@@ -2060,6 +2093,7 @@ void handle_minute_tick_cgm(struct tm* tick_time_cgm, TimeUnits units_changed_cg
 		// an incoming CGM push (health_schedule_send), not this tick
 		health_poll();
 #endif
+        update_sensor_info_displays(); 
 	}
 
 	if (tick_return_cgm != 0)
@@ -2757,8 +2791,6 @@ static void init_cgm(void)
 	window_stack_push(window_cgm, animated_cgm);
 
 #ifdef ENABLE_COMM_FRAMEWORK
-	comm_callbacks.bgl_data = NULL;
-	comm_callbacks.bgl_series = NULL;
 #ifdef ENABLE_TREND_RENDERER
 	comm_callbacks.low_limit = trend_set_low_line;
 	comm_callbacks.high_limit = trend_set_high_line;
@@ -2773,6 +2805,7 @@ static void init_cgm(void)
 	comm_callbacks.bgl_timestamp = set_bgl_timestamp;
 	comm_callbacks.bgl_value = set_bgl_value;
 	comm_callbacks.png = set_png;
+    comm_callbacks.sensor_info = set_sensor_info;
 	// the watch is the health data source, so nothing to receive
 	comm_callbacks.health = NULL;
 	comm_init(&comm_callbacks);
@@ -3018,6 +3051,18 @@ void set_message(comm_message message) {
 	if (message_tick_timer == NULL || !app_timer_reschedule(message_tick_timer, message_tick_timeout)) {
 		message_tick_timer = app_timer_register(message_tick_timeout, handle_message_tick, NULL);
 	}
+}
+
+void set_sensor_info(comm_sensor_info *value) {
+    // only update if need be, which it likely is since we received this message
+    if (bottom_left_metric == METRIC_SENSOR_EXPIRY || bottom_right_metric == METRIC_SENSOR_EXPIRY) {
+        // store sensor_end_time
+        if (value->end != sensor_end_time) {
+            sensor_end_time = value->end;
+            dirty.sensor_info = 1;
+            update_sensor_info_displays();
+        }
+    }
 }
 
 #endif
