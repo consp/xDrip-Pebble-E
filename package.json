@@ -1,5 +1,6 @@
 {
-  "version": "1.0.1",
+
+  "version": "1.0.3",
   "author": "Nightscout Foundation",
   "private": true,
   "keywords": [
@@ -144,7 +145,8 @@
           "name": "GOTHAM_BOLD_54",
           "file": "GothamBold.ttf",
           "targetPlatforms": [
-		"emery"
+            "emery",
+            "flint"
           ]
         },
         {
@@ -153,7 +155,8 @@
           "name": "GOTHAM_BOLD_BG_56",
           "file": "GothamBold.ttf",
           "targetPlatforms": [
-		"emery"
+            "emery",
+            "flint"
           ]
         },
         {
@@ -162,7 +165,7 @@
           "name": "GOTHAM_BOLD_BG_64",
           "file": "GothamBold.ttf",
           "targetPlatforms": [
-		"gabbro"
+            "gabbro"
           ]
         }
       ]
@@ -254,6 +257,7 @@
       "basalt",
       "chalk",
       "diorite",
+      "flint",
       "emery",
       "gabbro"
     ],
