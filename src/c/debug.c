@@ -1,6 +1,38 @@
 #include <pebble.h>
 #include "debug.h"
 
+#ifdef TRACE_LOG
+
+uint32_t trace_counter = 0;
+traceitem trace_log[TRACE_COUNT];
+
+char *trace_type_string[] = {
+    "BT_RECV",
+    "BT_SEND"
+};
+
+void trace_add(tracetype type, uint32_t value) {
+    trace_log[trace_counter % TRACE_COUNT].timestamp = time(NULL); 
+    trace_log[trace_counter % TRACE_COUNT].type = type;
+    trace_log[trace_counter % TRACE_COUNT].value = value;
+    trace_counter++;
+}
+
+void trace_init(void) {
+    trace_counter = 0;
+    memset(trace_log, 0x00, sizeof(trace_log));
+}
+
+void trace_print(void) {
+    for (int i = 0; i < TRACE_COUNT; i++) {
+        if (trace_log[i].timestamp != 0) {
+            WARNING("%10d %s %d", trace_log[i].timestamp, trace_type_string[trace_log[i].type], trace_log[i].value);
+        }
+    }
+}
+#endif
+
+
 char *translate_app_error(AppMessageResult result)
 {
     switch (result)

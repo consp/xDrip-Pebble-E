@@ -534,6 +534,9 @@ void comm_inbox_received_handler(DictionaryIterator *iterator, void *context)
             TRACE("Iterator handler %d, processed: %d", i, processed);
 #pragma GCC diagnostic pop
         }
+#ifdef TRACE_LOG
+        trace_add(TRACE_BLUETOOTH_RECEIVED, data->key);
+#endif
         data = dict_read_next(iterator);
     }
 } // end comm_inbox_received_handler 
@@ -589,6 +592,10 @@ bool comm_send_next(void)
     while(item != NULL) {
         if (NULL != item) {
             DEBUG("Comm send [%d] [%d] %d, %08X, %08X", item->code, backoff, backoffs[backoff], item, item->next);
+#ifdef TRACE_LOG
+            trace_add(TRACE_BLUETOOTH_SEND, item->code);
+#endif
+
         }
     // schedule next items
         switch (item->type) {

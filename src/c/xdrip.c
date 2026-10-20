@@ -608,8 +608,14 @@ int mgdl_to_mmoll_str(int mgdl, char *result, const int size, int unit) {
 
 int main(void)
 {
-
+#ifdef TRACE_LOG
+#pragma message "Build with trace collection enabled"
+    trace_init();
+#endif
     init_cgm();
     app_event_loop();
     deinit_cgm();
+#ifdef TRACE_LOG
+    trace_print();
+#endif
 } // end main
