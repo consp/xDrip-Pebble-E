@@ -102,7 +102,9 @@ bool comm_receiver(Tuple *data)
             TRACE(CM "Delta value");
             state.delta.raw = data->value->uint16;
             state.show_delta = state.delta.hidden ? false : true;
-            CALLBACK(state.wf_cb.set_delta, NULL, 0); // update no message but use delta
+            if (state.bgl_state == BGL_STATE_VALID) {
+                CALLBACK(state.wf_cb.set_delta, NULL, 0); // update no message but use delta
+            }
             break;
         case FRAMEWORK_BGL_VALUE:
             TRACE(CM "Update value");
@@ -115,13 +117,16 @@ bool comm_receiver(Tuple *data)
 #endif
                 switch (state.bgl_state) {
                     case BGL_STATE_VALID:
-                    case BGL_STATE_STALE:
-                        state.bgl_state = BGL_STATE_VALID;
-                        break;
-                    case BGL_STATE_INVALID:
-                        // if invalid, we likely need more data
-                        state.bgl_state = BGL_STATE_STALE;
-                        break;
+                    case BGL_STATE_STALE: {
+                            state.bgl_state = BGL_STATE_VALID;
+                            CALLBACK(state.wf_cb.set_delta, NULL, 0); // also update delta
+                            break;
+                        }
+                    case BGL_STATE_INVALID: {
+                            // if invalid, we likely need more data
+                            state.bgl_state = BGL_STATE_STALE;
+                            break;
+                        }
                 }
                 set_timestamp(value->timestamp);
                 if (!state.use_png && !state.dirty.need_cgm) trend_set_value(value);
@@ -130,7 +135,7 @@ bool comm_receiver(Tuple *data)
             }
             break;
         case FRAMEWORK_BGL_SERIES:
-            TRACE(CM "BGL Data stream");
+            WARNING(CM "BGL Data stream");
             comm_bgl_series *series = (comm_bgl_series *) data->value->data;
             TRACE(CM "Since %d", series->timestamp);
             state.dirty.need_cgm = 0; // series always results in latest state, checks for validity happen in the stale detector
@@ -146,6 +151,7 @@ bool comm_receiver(Tuple *data)
 #ifdef PBL_HEALTH
             CALLBACK(state.gl_cb.health_schedule_send); // update health values
 #endif
+            CALLBACK(state.wf_cb.set_delta, NULL, 0); // also update delta
             // we got data, reset state to valid?
             state.bgl_state = BGL_STATE_VALID;
             set_timestamp(series->timestamp);

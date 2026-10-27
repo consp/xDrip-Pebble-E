@@ -429,6 +429,10 @@ void reset_stale_timer_callback(void) {
 /*         timeout = 1 * SECONDS_PER_MINUTE * MS_IN_A_SECOND; */
 /*     } */
 
+    // assumptions:
+    // all data should be retrieved well within 10 seconds, unless you have a follower. This means that if the timer
+    // should fire 10 seconds after the escheduled interval time it should have either already been updated
+    // or something went wrong in which case the function checks the current state.
     bool update = false;
     DEBUG("reset_stale_timer: state: %d, cgm_time: %d delta: %ds next_interval: %ds", state.bgl_state, state.cgm_time, delta, next_interval);
     // all is in seconds from here
@@ -439,7 +443,7 @@ void reset_stale_timer_callback(void) {
             if (delta < state.sensor.interval + 10) {
                 // valid next item timeout (next interval)
                 break;
-            } // else fallthough
+            } // else fallthrough to stale, but it will likely recover when deta get's parsed
             state.bgl_state = BGL_STATE_STALE;
             // fallthrough
         case BGL_STATE_STALE:
@@ -447,32 +451,58 @@ void reset_stale_timer_callback(void) {
                 // request update but do not report as stale
                 state.dirty.need_cgm = 1;
                 update = true;
+
+                // if the stale data trigger is in the next interval window, trigger then (so it will vibe/do it's thing)
+                if (state.stale_data_timeout / 1000 < (uint32_t) delta + next_interval) {
+                    // stale show is done outside the switch
+                    timeout = (state.stale_data_timeout / 1000) - delta + 5;
+                }
+
                 break;
             } else if (delta > (int32_t) state.stale_data_timeout / 1000 && state.cgm_time != 0) {
-                // report stale, request update 
-                CALLBACK(state.wf_cb.set_delta, "Stale Data!", sizeof("Stale Data!")); // this has no effect if bluetooth is off 
-                CALLBACK(state.gl_cb.alert_handler, APPSYNC_ERR_VIBE);
-                if (!state.bluetooth_is_connected) {
-                    CALLBACK(state.wf_cb.set_icon, NO_ANTENNA);
-                    CALLBACK(state.wf_cb.set_message, "Conn. lost", sizeof("Conn. lost"));
-                }
+
                 state.dirty.need_cgm = 1;
                 update = true;
+
+                // set timeout for 1 minute
+                timeout = 60; // 60 seconds
                 break;
-            }
+            } else if (delta <= state.sensor.interval + 30) {
+                // we somehow did not get to a valid state despite likely  being in one
+                // check in a minute
+                timeout = 60;
+                break;
+            } // else state is invalid
+            // fallthrough
+        default:
             state.bgl_state = BGL_STATE_INVALID;
             // fallthrough
         case BGL_STATE_INVALID:
             state.dirty.need_cgm = 1;
             state.dirty.need_cgm_reset = 1;
             update = true;
+            timeout = 60; // 60 seconds
             break;
     }
-    // set for next expected interval + 10s
+
+    // check if we need to show stale in delta text box
+    if (state.stale_data_timeout / 1000 < (uint32_t) delta) {
+        // report stale, request update 
+        CALLBACK(state.wf_cb.set_delta, "Stale Data!", sizeof("Stale Data!")); // this has no effect if bluetooth is off 
+        CALLBACK(state.gl_cb.alert_handler, APPSYNC_ERR_VIBE);
+        if (!state.bluetooth_is_connected) {
+            CALLBACK(state.wf_cb.set_icon, NO_ANTENNA);
+            CALLBACK(state.wf_cb.set_message, "Conn. lost", sizeof("Conn. lost"));
+        }
+    }
+
+    // set for next expected interval + 10s if not alternative timeout has been set
     if (timeout == 0) timeout = next_interval + 10; 
+
     // send heartbeat to request update
     if (update && time(NULL) - state.stale_data_last_tick_time > 30) {
         state.stale_data_last_tick_time = (int32_t)time(NULL);
+        // if we have full debugging enabled, the timeout will trigger faster than the watch can output logs so we take longer
 #if defined(DEBUG_LEVEL) && DEBUG_LEVEL >= DEBUG_LEVEL_INFO
         if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(2000, deferred_send_cmd_cgm, NULL);
 #else
@@ -485,7 +515,7 @@ void reset_stale_timer_callback(void) {
     }
     // make ms
     timeout *= MS_IN_A_SECOND;
-    DEBUG("reset_stale_timer: timeout=%d, stale_data_timer=%d", timeout, stale_data_timer);
+    DEBUG("reset_stale_timer: state: %d timeout=%d, stale_data_timer=%d", state.bgl_state, timeout, stale_data_timer);
     if (NULL == stale_data_timer || !app_timer_reschedule(stale_data_timer, timeout)) {
         stale_data_timer = app_timer_register(timeout, handle_stale_data_tick, NULL);
     }
@@ -647,6 +677,8 @@ static void deinit_cgm(void)
         app_timer_cancel(BT_timer);
         BT_timer = NULL;
     }
+    // make sure the stale timer is triggered
+    reset_stale_timer_callback();
 
     TRACE("DEINIT CODE OUT");
 } // end deinit_cgm
