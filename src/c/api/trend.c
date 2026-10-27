@@ -42,6 +42,28 @@ void trend_init(Layer *layer) {
             free(tmp);
         }
     }
+
+    /* check for accidental weirdness
+     *
+     */
+
+    if (config.bgl.initialized == 1 && (config.bgl.size == 0 || config.bgl.index >  (uint16_t) (sizeof(config.bgl.values) / sizeof(trend_bgl_value)))) {
+        WARNING("Trend Reset due to invalid state");
+        config.bgl.initialized = 0;
+        config.bgl.index = 0;
+        config.bgl.size = 0;
+    } else if (config.bgl.initialized) {
+        // check for all zeroes
+        int i = 0;
+        for (; i < config.bgl.size && config.bgl.values[i] == 0; i++);
+        if (i == config.bgl.size) {
+            WARNING("Trend Reset due to invalid state");
+            config.bgl.initialized = 0;
+            config.bgl.size = 0;
+            config.bgl.index = 0;
+        }
+    }
+
     /*
      * trend settings
      */

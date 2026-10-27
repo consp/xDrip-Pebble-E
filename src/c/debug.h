@@ -26,7 +26,7 @@ Make sure you udefine this before building a release.
 #define DEBUG_APP_INFO 1
 #define DEBUG_APP_NONE 0
 
-/* #define DEBUG_LEVEL DEBUG_APP_NONE   */
+/* #define DEBUG_LEVEL DEBUG_APP_DEBUG  */
 
 /*  
  *  The line below will set the debug message level.

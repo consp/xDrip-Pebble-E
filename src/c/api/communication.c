@@ -135,7 +135,7 @@ bool comm_receiver(Tuple *data)
             }
             break;
         case FRAMEWORK_BGL_SERIES:
-            WARNING(CM "BGL Data stream");
+            TRACE(CM "BGL Data stream");
             comm_bgl_series *series = (comm_bgl_series *) data->value->data;
             TRACE(CM "Since %d", series->timestamp);
             state.dirty.need_cgm = 0; // series always results in latest state, checks for validity happen in the stale detector
@@ -498,10 +498,10 @@ void comm_request_heartbeat(void)
         hb.send_slope_arrow = 1;
         hb.send_delta_value = 1;
         if (state.dirty.need_cgm_reset) {
-            comm_schedule_item(FRAMEWORK_BGL_VALUE, &state.cgm_time, sizeof(state.cgm_time), COMM_TYPE_UINT32);
-        } else {
             uint32_t zero = 0;
             comm_schedule_item(FRAMEWORK_BGL_VALUE, &zero, sizeof(uint32_t), COMM_TYPE_UINT32);
+        } else {
+            comm_schedule_item(FRAMEWORK_BGL_VALUE, &state.cgm_time, sizeof(state.cgm_time), COMM_TYPE_UINT32);
         }
         if (state.use_png && state.wf_cb.trend_bounds != NULL) {
             comm_request_png(state.wf_cb.trend_bounds());
