@@ -20,6 +20,7 @@ void settings_init(AppState *values) {
     state->cgm_time = 0;
     state->app_time = 0;
     state->dirty.need_cgm = 1;
+    state->dirty.need_cgm_reset = 1;
     state->dirty.delta = 1;
     state->dirty.sensor_info = 1;
     state->phone_battery_level = 255;
@@ -103,6 +104,7 @@ void settings_init(AppState *values) {
     // check if we actually need a refresh
     if (time(NULL) - state->cgm_time < (uint32_t) state->sensor.interval) {
         state->dirty.need_cgm = 0;
+        state->dirty.need_cgm_reset = 0;
     }
 
     if (state->sensor.sensor_type == 0) state->dirty.sensor_info = 1;
@@ -226,8 +228,8 @@ bool settings_receiver(Tuple *data) {
         case SET_USE_PNG:
             SETTING_BOOL_CB(use_png, data->value->uint8, SET_USE_PNG, update_trend);
             // special case, if this is received wipe storage and request data
-            state->cgm_time = 0;
             state->dirty.need_cgm = 1;
+            state->dirty.need_cgm_reset = 1;
             comm_request_heartbeat();
             break;
 

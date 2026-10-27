@@ -851,12 +851,12 @@ void update_trend(void) {
         trend_init(bitmap_layer_get_layer(bg_trend_layer_draw));
         layer_set_hidden(bitmap_layer_get_layer(bg_trend_layer_png), true);
         state.dirty.need_cgm = 1;
-        state.cgm_time = 0; // force update all
+        state.dirty.need_cgm_reset = 1;
     } else if (state.use_png && layer_get_hidden(bitmap_layer_get_layer(bg_trend_layer_png))) {
         trend_deinit();
         layer_set_hidden(bitmap_layer_get_layer(bg_trend_layer_png), false);
         state.dirty.need_cgm = 1;
-        state.cgm_time = 0; // force update all
+        state.dirty.need_cgm_reset = 1;
     }
 }
 

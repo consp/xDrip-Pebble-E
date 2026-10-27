@@ -14,8 +14,8 @@ this is for testing purposes only until I can get the PebbleKit.JS code operatin
 Make sure you udefine this before building a release.
 */
 /* #define TEST_MODE */
-#define TRACE_LOG
-#define TRACE_COUNT 2048
+/* #define TRACE_LOG */
+/* #define TRACE_COUNT 2048 */
 
 /*
  * Set debug text to show and compile DEBUG_APP_[NONE,INFO,DEBUG,TRACE]

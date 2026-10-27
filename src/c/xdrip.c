@@ -419,7 +419,7 @@ void reset_stale_timer_callback(void) {
         DEBUG("%d %d %d", state.dirty.need_cgm, interval, state.stale_data_timeout);
         // likely invalid data, request reset
         state.dirty.need_cgm = 1;
-        state.cgm_time = 0;
+        state.dirty.need_cgm_reset = 1;
         if (trend_isinitialized()) trend_reset();
  #if DEBUG_LEVEL >= DEBUG_LEVEL_INFO
         if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(2000, deferred_send_cmd_cgm, NULL);

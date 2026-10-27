@@ -10,6 +10,7 @@
 typedef struct {
     uint32_t delta : 1;     // mark delta layer as dirty and update 
     uint32_t need_cgm : 1;  // make the heartbeat request delta and slope
+    uint32_t need_cgm_reset : 1; // Make thee heartbeat request ALL data
     uint32_t step_count : 1;
     uint32_t hbm : 1;
     uint32_t sensor_info : 1;
@@ -127,5 +128,5 @@ typedef enum {
     TOUCH_PALM = 5,
 } touch_method;
 
-#define STORAGE_MARKER 0x0C
+#define STORAGE_MARKER 0x0E
 #endif // __SETTINGS_H__

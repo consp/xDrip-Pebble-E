@@ -53,8 +53,10 @@ static void set_timestamp(time_t timestamp) {
         state.cgm_time = timestamp;
     } else if ((state.sensor.interval != 0) && (time(NULL) - timestamp > (state.sensor.interval + 10))) {
         state.dirty.need_cgm = 1;
+        state.dirty.need_cgm_reset = 1;
     } else if ((state.sensor.interval == 0) && (time(NULL) - timestamp > (310))) { // fallback 5 min for when sensor interval is not known
         state.dirty.need_cgm = 1;
+        state.dirty.need_cgm_reset = 1;
     } else {
         state.cgm_time = timestamp;
     }
@@ -120,7 +122,7 @@ bool comm_receiver(Tuple *data)
             comm_bgl_series *series = (comm_bgl_series *) data->value->data;
             TRACE(CM "Since %d", series->timestamp);
             state.dirty.need_cgm = 0; // series always results in latest state, checks for validity happen in the stale detector
-
+            state.dirty.need_cgm_reset = 0;
             trend_set_series(series); // no callback, must be present, could be noop if disabled
             state.bgl_value = series->bgl_values[series->length - 1];
             set_timestamp(series->timestamp);
@@ -475,7 +477,12 @@ void comm_request_heartbeat(void)
     if (state.dirty.need_cgm) {
         hb.send_slope_arrow = 1;
         hb.send_delta_value = 1;
-        comm_schedule_item(FRAMEWORK_BGL_VALUE, &state.cgm_time, sizeof(state.cgm_time), COMM_TYPE_UINT32);
+        if (state.dirty.need_cgm_reset) {
+            comm_schedule_item(FRAMEWORK_BGL_VALUE, &state.cgm_time, sizeof(state.cgm_time), COMM_TYPE_UINT32);
+        } else {
+            uint32_t zero = 0;
+            comm_schedule_item(FRAMEWORK_BGL_VALUE, &zero, sizeof(uint32_t), COMM_TYPE_UINT32);
+        }
         if (state.use_png && state.wf_cb.trend_bounds != NULL) {
             comm_request_png(state.wf_cb.trend_bounds());
         }
