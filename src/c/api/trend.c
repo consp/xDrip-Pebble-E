@@ -470,6 +470,8 @@ void trend_set_value(comm_bgl_data *value) {
 bool trend_receiver(Tuple *data) {
 
     bool rv = true;
+    if (data->key < 300 || data->key > 400) return false; // out of scope
+    
     DEBUG("Trend key: %d", data->key);
     switch (data->key) {
         case SET_BGL_CRITICAL_COLOUR:

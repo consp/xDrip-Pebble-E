@@ -154,7 +154,8 @@ void settings_deinit(void) {
 bool settings_receiver(Tuple *data) {
 
     bool rv = true;
-
+    if (data->key < 100 || data->key > 300) return false; // out of scope
+    
     switch (data->key)
     {
         case SET_SAMECOLOUR:

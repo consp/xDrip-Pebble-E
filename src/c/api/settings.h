@@ -16,6 +16,12 @@ typedef struct {
     uint32_t sensor_info : 1;
 } dirty_markers;
 
+enum bgl_state {
+    BGL_STATE_VALID = 0,
+    BGL_STATE_STALE = 1,
+    BGL_STATE_INVALID = 2,
+};
+
 #pragma pack(push, a, 1)
 typedef struct {
 
@@ -98,10 +104,12 @@ typedef struct {
 
             comm_sensor_info sensor;
 
+            enum bgl_state bgl_state;
+
             comm_bgl_delta delta;
             comm_bgl_value bgl_value;
         };
-        uint8_t state_blob[(sizeof(uint32_t) * 7) + (sizeof(uint8_t) * 4) + sizeof(comm_sensor_info) + sizeof(comm_bgl_value) + sizeof(comm_bgl_delta) + (sizeof(int32_t) * 2)];
+        uint8_t state_blob[(sizeof(uint32_t) * 7) + (sizeof(uint8_t) * 4) + sizeof(comm_sensor_info) + sizeof(comm_bgl_value) + sizeof(comm_bgl_delta) + (sizeof(int32_t) * 2) + sizeof(enum bgl_state)];
     };
 
     // global dirty markers

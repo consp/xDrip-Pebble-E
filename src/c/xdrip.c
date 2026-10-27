@@ -289,6 +289,7 @@ void handle_bluetooth_cgm(bool bt_connected)
         // Bluetooth is on, reset state.bluetooth_alert
         TRACE("HANDLE BT: BLUETOOTH ON");
         state.bluetooth_alert = false;
+        DEBUG("SEND CGM FROM BT");
         send_cmd_cgm();
 
         if (BT_timer == NULL)
@@ -342,7 +343,7 @@ static void send_cmd_cgm(void)
     // if bt escapes early (above) outbox_begin MAY NOT be triggered as it will leave the outbox in
     // an unrecoverable state, the entire function must be performed if app_message_outbox_begin succeeds.
 
-        comm_request_heartbeat();
+    comm_request_heartbeat();
 
     TRACE("send_cmd_cgm: done");
 } // end send_cmd_cgm
@@ -364,6 +365,7 @@ AppTimer *deffered_send_cmd_cgm_timer = NULL;
 void deferred_send_cmd_cgm(void *data) {
 
     deffered_send_cmd_cgm_timer = NULL;
+    /* WARNING("SEND CGM FROM DEFERRED"); */
     send_cmd_cgm();
 }
 
@@ -372,12 +374,10 @@ void reset_stale_timer_callback(void) {
 
     INFO("STALE TIMER RESET");
 
-    int32_t timeout = MS_IN_A_SECOND; // 1s
+    int32_t timeout = 0;
     int32_t now = time(NULL);
-    int32_t interval = now - state.cgm_time;
-    if(state.stale_data_last_tick_time == 0) {
-        state.stale_data_last_tick_time = (int32_t)time(NULL);
-    }
+    int32_t delta = now - state.cgm_time;
+    int32_t next_interval = state.cgm_time == 0 ? state.sensor.interval : (state.sensor.interval - (delta % state.sensor.interval)); 
     /**
      * stale data timer logic:
      * data is likely valid, time since last update > stale timer -> report stale message
@@ -387,47 +387,104 @@ void reset_stale_timer_callback(void) {
      * data is invalid, we have no data -> request reset
      */
 
-    DEBUG("reset_stale_timer: stale_data_timeout=%d, cgm_time=%d ", state.stale_data_timeout, state.cgm_time);
-    DEBUG("reset_stale_timer: stale_data_last_tick_time=%d, now=%d", state.stale_data_last_tick_time, now);
-    if (state.cgm_time != 0 && now >= (int32_t) (state.stale_data_last_tick_time + state.stale_data_timeout)) {
-        state.stale_data_last_tick_time = (uint32_t)now;
-        DEBUG("reset_stale_timer: setting Stale Data and setting timer to %d", state.stale_data_timeout);
-        CALLBACK(state.wf_cb.set_delta, "Stale Data!", sizeof("Stale Data!")); // this has no effect if bluetooth is off 
-        CALLBACK(state.gl_cb.alert_handler, APPSYNC_ERR_VIBE);
-        if (!state.bluetooth_is_connected) {
-            CALLBACK(state.wf_cb.set_icon, NO_ANTENNA);
-            CALLBACK(state.wf_cb.set_message, "Conn. lost", sizeof("Conn. lost"));
-        }
-        state.dirty.need_cgm = 1;
-        //timeout = 1 * SECONDS_PER_MINUTE * MS_IN_A_SECOND; // this was too agressive, especially overnight.  Best to be the same as the initial timeout.
-        timeout = (int32_t) state.stale_data_timeout;
-        // defer update a bit, we might have a settings update, if debug wait longer 
-#if DEBUG_LEVEL >= DEBUG_LEVEL_INFO
-        if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(2000, deferred_send_cmd_cgm, NULL);
-#else
-        if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(500, deferred_send_cmd_cgm, NULL);
-#endif
-    } else if (state.dirty.need_cgm == 0 && interval < state.sensor.interval) {
-        DEBUG("reset_stale_timer: Normal reset");
-        timeout = (state.sensor.interval - (now - state.cgm_time) + SENSOR_DELAY_TIME) * MS_IN_A_SECOND;
-/*    } else if (state.dirty.need_cgm == 0 && interval > state.sensor.interval && interval < state.sensor.interval + 60) {
-        // need to understand this calculation as it comes out way too large.  I think it is the MS_IN_A_SECOND that is causing this.  It should be resetting the timer to around state.stale_data_timeout
-        DEBUG("reset_stale_timer: Normal interval");
-        timeout = (state.sensor.interval + SENSOR_DELAY_TIME) * MS_IN_A_SECOND;
-*/    } else {
-        DEBUG("reset_stale_timer: Invalid data");
-        DEBUG("%d %d %d", state.dirty.need_cgm, interval, state.stale_data_timeout);
-        // likely invalid data, request reset
-        state.dirty.need_cgm = 1;
-        state.dirty.need_cgm_reset = 1;
-        if (trend_isinitialized()) trend_reset();
- #if DEBUG_LEVEL >= DEBUG_LEVEL_INFO
-        if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(2000, deferred_send_cmd_cgm, NULL);
-#else
-        if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(500, deferred_send_cmd_cgm, NULL);
-#endif
-        timeout = 1 * SECONDS_PER_MINUTE * MS_IN_A_SECOND;
+/*     DEBUG("reset_stale_timer: stale_data_timeout=%d, cgm_time=%d ", state.stale_data_timeout, state.cgm_time); */
+/*     DEBUG("reset_stale_timer: stale_data_last_tick_time=%d, now=%d", state.stale_data_last_tick_time, now); */
+/*     if (state.cgm_time != 0 && now >= (int32_t) (state.stale_data_last_tick_time + state.stale_data_timeout)) { */
+/*         state.stale_data_last_tick_time = (uint32_t)now; */
+/*         DEBUG("reset_stale_timer: setting Stale Data and setting timer to %d", state.stale_data_timeout); */
+/*         CALLBACK(state.wf_cb.set_delta, "Stale Data!", sizeof("Stale Data!")); // this has no effect if bluetooth is off  */
+/*         CALLBACK(state.gl_cb.alert_handler, APPSYNC_ERR_VIBE); */
+/*         if (!state.bluetooth_is_connected) { */
+/*             CALLBACK(state.wf_cb.set_icon, NO_ANTENNA); */
+/*             CALLBACK(state.wf_cb.set_message, "Conn. lost", sizeof("Conn. lost")); */
+/*         } */
+/*         state.dirty.need_cgm = 1; */
+/*         //timeout = 1 * SECONDS_PER_MINUTE * MS_IN_A_SECOND; // this was too agressive, especially overnight.  Best to be the same as the initial timeout. */
+/*         timeout = (int32_t) state.stale_data_timeout; */
+/*         // defer update a bit, we might have a settings update, if debug wait longer  */
+/* #if DEBUG_LEVEL >= DEBUG_LEVEL_INFO */
+/*         if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(2000, deferred_send_cmd_cgm, NULL); */
+/* #else */
+/*         if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(500, deferred_send_cmd_cgm, NULL); */
+/* #endif */
+/*     } else if (state.dirty.need_cgm == 0 && interval < state.sensor.interval) { */
+/*         DEBUG("reset_stale_timer: Normal reset"); */
+/*         timeout = (state.sensor.interval - (now - state.cgm_time) + SENSOR_DELAY_TIME) * MS_IN_A_SECOND; */
+/* #<{(|    } else if (state.dirty.need_cgm == 0 && interval > state.sensor.interval && interval < state.sensor.interval + 60) { */
+/*         // need to understand this calculation as it comes out way too large.  I think it is the MS_IN_A_SECOND that is causing this.  It should be resetting the timer to around state.stale_data_timeout */
+/*         DEBUG("reset_stale_timer: Normal interval"); */
+/*         timeout = (state.sensor.interval + SENSOR_DELAY_TIME) * MS_IN_A_SECOND; */
+/* |)}>#    } else { */
+/*         DEBUG("reset_stale_timer: Invalid data"); */
+/*         DEBUG("%d %d %d", state.dirty.need_cgm, interval, state.stale_data_timeout); */
+/*         // likely invalid data, request reset */
+/*         state.dirty.need_cgm = 1; */
+/*         state.dirty.need_cgm_reset = 1; */
+/*         if (trend_isinitialized()) trend_reset(); */
+/* #if DEBUG_LEVEL >= DEBUG_LEVEL_INFO */
+/*         if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(2000, deferred_send_cmd_cgm, NULL); */
+/* #else */
+/*         if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(500, deferred_send_cmd_cgm, NULL); */
+/* #endif */
+/*         timeout = 1 * SECONDS_PER_MINUTE * MS_IN_A_SECOND; */
+/*     } */
+
+    bool update = false;
+    DEBUG("reset_stale_timer: state: %d, cgm_time: %d delta: %ds next_interval: %ds", state.bgl_state, state.cgm_time, delta, next_interval);
+    // all is in seconds from here
+    // state only gets worse, recovery is checked on data reception
+    // the state "machine" makes it more clear what the watch thinks is going on
+    switch (state.bgl_state) {
+        case BGL_STATE_VALID:
+            if (delta < state.sensor.interval + 10) {
+                // valid next item timeout (next interval)
+                break;
+            } // else fallthough
+            state.bgl_state = BGL_STATE_STALE;
+            // fallthrough
+        case BGL_STATE_STALE:
+            if (delta > state.sensor.interval + 30 && delta < (int32_t) state.stale_data_timeout / 1000) {
+                // request update but do not report as stale
+                state.dirty.need_cgm = 1;
+                update = true;
+                break;
+            } else if (delta > (int32_t) state.stale_data_timeout / 1000 && state.cgm_time != 0) {
+                // report stale, request update 
+                CALLBACK(state.wf_cb.set_delta, "Stale Data!", sizeof("Stale Data!")); // this has no effect if bluetooth is off 
+                CALLBACK(state.gl_cb.alert_handler, APPSYNC_ERR_VIBE);
+                if (!state.bluetooth_is_connected) {
+                    CALLBACK(state.wf_cb.set_icon, NO_ANTENNA);
+                    CALLBACK(state.wf_cb.set_message, "Conn. lost", sizeof("Conn. lost"));
+                }
+                state.dirty.need_cgm = 1;
+                update = true;
+                break;
+            }
+            state.bgl_state = BGL_STATE_INVALID;
+            // fallthrough
+        case BGL_STATE_INVALID:
+            state.dirty.need_cgm = 1;
+            state.dirty.need_cgm_reset = 1;
+            update = true;
+            break;
     }
+    // set for next expected interval + 10s
+    if (timeout == 0) timeout = next_interval + 10; 
+    // send heartbeat to request update
+    if (update && time(NULL) - state.stale_data_last_tick_time > 30) {
+        state.stale_data_last_tick_time = (int32_t)time(NULL);
+#if defined(DEBUG_LEVEL) && DEBUG_LEVEL >= DEBUG_LEVEL_INFO
+        if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(2000, deferred_send_cmd_cgm, NULL);
+#else
+        if (NULL == deffered_send_cmd_cgm_timer) deffered_send_cmd_cgm_timer = app_timer_register(500, deferred_send_cmd_cgm, NULL);
+#endif
+    }
+
+    if(state.stale_data_last_tick_time == 0) {
+        state.stale_data_last_tick_time = (int32_t)time(NULL);
+    }
+    // make ms
+    timeout *= MS_IN_A_SECOND;
     DEBUG("reset_stale_timer: timeout=%d, stale_data_timer=%d", timeout, stale_data_timer);
     if (NULL == stale_data_timer || !app_timer_reschedule(stale_data_timer, timeout)) {
         stale_data_timer = app_timer_register(timeout, handle_stale_data_tick, NULL);

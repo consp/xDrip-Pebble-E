@@ -73,6 +73,8 @@ bool comm_receiver(Tuple *data)
     INFO(CM "Key: %d", key);
 
     bool rv = true;
+
+    if (data->key < 2000 || data->key > 3000) return false; // out of scope
     
     switch (key) {
         case FRAMEWORK_HIGHLIMIT:
@@ -106,12 +108,22 @@ bool comm_receiver(Tuple *data)
             TRACE(CM "Update value");
             comm_bgl_data *value = (comm_bgl_data *) data->value->data;
             if (value->timestamp != state.cgm_time) {
-                set_timestamp(value->timestamp);
                 state.bgl_value = value->bgl;
                 CALLBACK(state.wf_cb.update_bgl_value);
 #ifdef PBL_HEALTH
                 CALLBACK(state.gl_cb.health_schedule_send);
 #endif
+                switch (state.bgl_state) {
+                    case BGL_STATE_VALID:
+                    case BGL_STATE_STALE:
+                        state.bgl_state = BGL_STATE_VALID;
+                        break;
+                    case BGL_STATE_INVALID:
+                        // if invalid, we likely need more data
+                        state.bgl_state = BGL_STATE_STALE;
+                        break;
+                }
+                set_timestamp(value->timestamp);
                 if (!state.use_png && !state.dirty.need_cgm) trend_set_value(value);
             } else {
                 WARNING("Received same bgl value twice!");
@@ -124,8 +136,8 @@ bool comm_receiver(Tuple *data)
             state.dirty.need_cgm = 0; // series always results in latest state, checks for validity happen in the stale detector
             state.dirty.need_cgm_reset = 0;
             trend_set_series(series); // no callback, must be present, could be noop if disabled
-            state.bgl_value = series->bgl_values[series->length - 1];
-            set_timestamp(series->timestamp);
+            // update only if not zero
+            if (series->bgl_values[series->length - 1].value != 0) state.bgl_value = series->bgl_values[series->length - 1];
             // update show state
             state.show_trend = !series->hidden;
             persist_write_bool(SET_SHOW_TREND, state.show_trend);
@@ -134,7 +146,9 @@ bool comm_receiver(Tuple *data)
 #ifdef PBL_HEALTH
             CALLBACK(state.gl_cb.health_schedule_send); // update health values
 #endif
-            CALLBACK(state.gl_cb.update_stale_timeout); // update the stale check
+            // we got data, reset state to valid?
+            state.bgl_state = BGL_STATE_VALID;
+            set_timestamp(series->timestamp);
             break;
         case FRAMEWORK_PNG_IMAGE:
             TRACE(CM "PNG image data");
