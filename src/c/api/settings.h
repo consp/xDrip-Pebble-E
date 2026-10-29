@@ -82,6 +82,7 @@ typedef struct {
             uint32_t sensor_end_time;
             uint32_t stale_data_timeout;
             uint32_t stale_data_last_tick_time; // last time the stale data timer ticked
+            uint16_t stale_counter;             // number of times stale ticked
         
             int32_t step_count;
             int32_t hbm;
@@ -109,7 +110,7 @@ typedef struct {
             comm_bgl_delta delta;
             comm_bgl_value bgl_value;
         };
-        uint8_t state_blob[(sizeof(uint32_t) * 7) + (sizeof(uint8_t) * 4) + sizeof(comm_sensor_info) + sizeof(comm_bgl_value) + sizeof(comm_bgl_delta) + (sizeof(int32_t) * 2) + sizeof(enum bgl_state)];
+        uint8_t state_blob[(sizeof(uint32_t) * 7) + (sizeof(uint8_t) * 4) + sizeof(int16_t) + sizeof(comm_sensor_info) + sizeof(comm_bgl_value) + sizeof(comm_bgl_delta) + (sizeof(int32_t) * 2) + sizeof(enum bgl_state)];
     };
 
     // global dirty markers
@@ -136,5 +137,5 @@ typedef enum {
     TOUCH_PALM = 5,
 } touch_method;
 
-#define STORAGE_MARKER 0x0E
+#define STORAGE_MARKER 0x0F
 #endif // __SETTINGS_H__

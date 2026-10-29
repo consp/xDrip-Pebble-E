@@ -441,6 +441,7 @@ void reset_stale_timer_callback(void) {
     switch (state.bgl_state) {
         case BGL_STATE_VALID:
             if (delta < state.sensor.interval + 10) {
+                state.stale_counter = 0; // reset stale counter
                 // valid next item timeout (next interval)
                 break;
             } // else fallthrough to stale, but it will likely recover when deta get's parsed
@@ -465,12 +466,14 @@ void reset_stale_timer_callback(void) {
                 update = true;
 
                 // set timeout for 1 minute
-                timeout = 60; // 60 seconds
+                if (state.stale_counter < 10) timeout = 60; // 60 seconds
+                state.stale_counter++;
                 break;
             } else if (delta <= state.sensor.interval + 30) {
                 // we somehow did not get to a valid state despite likely  being in one
                 // check in a minute
-                timeout = 60;
+                if (state.stale_counter < 10) timeout = 60; // 60 seconds
+                state.stale_counter++;
                 break;
             } // else state is invalid
             // fallthrough
@@ -478,10 +481,11 @@ void reset_stale_timer_callback(void) {
             state.bgl_state = BGL_STATE_INVALID;
             // fallthrough
         case BGL_STATE_INVALID:
+            state.stale_counter++;
             state.dirty.need_cgm = 1;
             state.dirty.need_cgm_reset = 1;
             update = true;
-            timeout = 60; // 60 seconds
+            if (state.stale_counter < 10) timeout = 60; // 60 seconds
             break;
     }
 
@@ -500,7 +504,7 @@ void reset_stale_timer_callback(void) {
     if (timeout == 0) timeout = next_interval + 10; 
 
     // send heartbeat to request update
-    if (update && time(NULL) - state.stale_data_last_tick_time > 30) {
+    if ((update && time(NULL) - state.stale_data_last_tick_time > 30) || (!state.use_png && !trend_isinitialized())) {
         state.stale_data_last_tick_time = (int32_t)time(NULL);
         // if we have full debugging enabled, the timeout will trigger faster than the watch can output logs so we take longer
 #if defined(DEBUG_LEVEL) && DEBUG_LEVEL >= DEBUG_LEVEL_INFO

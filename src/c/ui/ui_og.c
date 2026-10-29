@@ -858,6 +858,14 @@ void update_trend(void) {
         state.dirty.need_cgm = 1;
         state.dirty.need_cgm_reset = 1;
     }
+
+    // in case the trend image has been uninitialized (e.g. when stale data has been detected) request all data
+    // since heartbeats are never send multiple times there is no harm in sending it here
+    if (!state.use_png && !trend_isinitialized()) {
+        state.dirty.need_cgm = 1;
+        state.dirty.need_cgm_reset = 1;
+        comm_request_heartbeat();
+    }
 }
 
 void update_timeago(void) {

@@ -129,7 +129,14 @@ bool comm_receiver(Tuple *data)
                         }
                 }
                 set_timestamp(value->timestamp);
-                if (!state.use_png && !state.dirty.need_cgm) trend_set_value(value);
+                // If we get a value and the trend store is not backfilled, move to a full update, we detect this
+                // here since if we get a value, it is highly likely the backfill has happened
+                if (trend_detect_gap(false)) {
+                    WARNING("Detected broken trace state");
+                    state.dirty.need_cgm = 1;
+                    state.dirty.need_cgm_reset = 1;
+                    comm_request_heartbeat();
+                } else if (!state.use_png) trend_set_value(value);
             } else {
                 WARNING("Received same bgl value twice!");
             }
@@ -138,23 +145,32 @@ bool comm_receiver(Tuple *data)
             TRACE(CM "BGL Data stream");
             comm_bgl_series *series = (comm_bgl_series *) data->value->data;
             TRACE(CM "Since %d", series->timestamp);
-            state.dirty.need_cgm = 0; // series always results in latest state, checks for validity happen in the stale detector
-            state.dirty.need_cgm_reset = 0;
-            trend_set_series(series); // no callback, must be present, could be noop if disabled
-            // update only if not zero
-            if (series->bgl_values[series->length - 1].value != 0) state.bgl_value = series->bgl_values[series->length - 1];
-            // update show state
-            state.show_trend = !series->hidden;
-            persist_write_bool(SET_SHOW_TREND, state.show_trend);
-            CALLBACK(state.wf_cb.update_trend); // update trend layers if enabled
-            CALLBACK(state.wf_cb.update_bgl_value); // set bgl value on screen
+            if (!trend_isinitialized() && series->length < 12) {
+                // trend is smaller than minimum needed for initialization. Request full HB
+                // It's highly unlikely we end up here but it's a recovery if something fails.
+                WARNING("Trend series is too small to fill an uninitialized trend");
+                state.dirty.need_cgm = 1;
+                state.dirty.need_cgm_reset = 1;
+                comm_request_heartbeat();
+            } else {
+                state.dirty.need_cgm = 0; // series always results in latest state, checks for validity happen in the stale detector
+                state.dirty.need_cgm_reset = 0;
+                trend_set_series(series); // no callback, must be present, could be noop if disabled
+                // update only if not zero
+                if (series->bgl_values[series->length - 1].value != 0) state.bgl_value = series->bgl_values[series->length - 1];
+                // update show state
+                state.show_trend = !series->hidden;
+                persist_write_bool(SET_SHOW_TREND, state.show_trend);
+                CALLBACK(state.wf_cb.update_trend); // update trend layers if enabled
+                CALLBACK(state.wf_cb.update_bgl_value); // set bgl value on screen
 #ifdef PBL_HEALTH
-            CALLBACK(state.gl_cb.health_schedule_send); // update health values
+                CALLBACK(state.gl_cb.health_schedule_send); // update health values
 #endif
-            CALLBACK(state.wf_cb.set_delta, NULL, 0); // also update delta
-            // we got data, reset state to valid?
-            state.bgl_state = BGL_STATE_VALID;
-            set_timestamp(series->timestamp);
+                CALLBACK(state.wf_cb.set_delta, NULL, 0); // also update delta
+                // we got data, reset state to valid?
+                state.bgl_state = BGL_STATE_VALID;
+                set_timestamp(series->timestamp);
+            }
             break;
         case FRAMEWORK_PNG_IMAGE:
             TRACE(CM "PNG image data");
@@ -494,11 +510,12 @@ void comm_request_heartbeat(void)
     // xdrip decides what to send with respect to the CGM_TIME and if use_png is set or not
     // Due to xdrip possibly not knowing what the state of the screen is the png size is also
     // send to xdrip
-    if (state.dirty.need_cgm) {
+    if (state.dirty.need_cgm || !trend_isinitialized()) {
         hb.send_slope_arrow = 1;
         hb.send_delta_value = 1;
-        if (state.dirty.need_cgm_reset) {
+        if (state.dirty.need_cgm_reset || !trend_isinitialized()) {
             uint32_t zero = 0;
+            trend_reset(); // make sure trend is reset
             comm_schedule_item(FRAMEWORK_BGL_VALUE, &zero, sizeof(uint32_t), COMM_TYPE_UINT32);
         } else {
             comm_schedule_item(FRAMEWORK_BGL_VALUE, &state.cgm_time, sizeof(state.cgm_time), COMM_TYPE_UINT32);
